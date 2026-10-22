@@ -1,0 +1,27 @@
+﻿{
+  "name": "my-bakery-system",
+  "version": "1.0.0",
+  "description": "Sistema de gestión integral para panadería y repostería artesanal (Mobile-First)",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "seed": "node src/database/seed.js"
+  },
+  "keywords": [
+    "bakery",
+    "reposteria",
+    "panaderia",
+    "recetas",
+    "inventario",
+    "pedidos",
+    "mobile-first"
+  ],
+  "author": "Dulce Menta",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
