@@ -87,12 +87,19 @@ function calcRecipeCostSync(recipes, ingredients, productId) {
 }
 
 function enrichProductSync(p, recipes, ingredients) {
-  const cost       = calcRecipeCostSync(recipes, ingredients, p.id);
-  const unitCost   = p.yield_quantity > 0 ? cost / p.yield_quantity : cost;
-  const profit     = p.sale_price - cost;
-  const pct        = p.sale_price > 0 ? (profit / p.sale_price) * 100 : 0;
+  const cost          = calcRecipeCostSync(recipes, ingredients, p.id);
+  const yieldQty      = p.yield_quantity > 0 ? p.yield_quantity : 1;
+  const unitCost      = cost / yieldQty;
+  const profit        = p.sale_price - cost;
+  const pct           = p.sale_price > 0 ? (profit / p.sale_price) * 100 : 0;
+  const rawWeight     = parseFloat(p.raw_weight) || 0;
+  const rawWeightUnit = p.raw_weight_unit || 'g';
+  const totalRawWeight= Math.round(rawWeight * yieldQty * 100) / 100;
   return {
     ...p,
+    raw_weight:        rawWeight,
+    raw_weight_unit:   rawWeightUnit,
+    total_raw_weight:  totalRawWeight,
     total_recipe_cost: Math.round(cost * 100) / 100,
     unit_cost:         Math.round(unitCost * 100) / 100,
     gross_profit:      Math.round(profit * 100) / 100,
@@ -216,11 +223,11 @@ async function seedInitialData() {
   await DB.setList('inventory_movements', movements);
 
   const products = [
-    { id:1, name:'Queque de Zanahoria & Nuez con Frosting',         category:'Queques y Tartas',    description:'Bizcocho especiado con canela, nueces tostadas y cobertura suave de queso crema',               sale_price:16500, yield_quantity:1,  yield_unit:'queque',     is_active:1 },
-    { id:2, name:'Hogaza Rústica de Masa Madre',                     category:'Panadería Artesanal', description:'Fermentación lenta de 24 horas, corteza crujiente y miga abierta alveolada',                    sale_price:3800,  yield_quantity:1,  yield_unit:'hogaza',     is_active:1 },
-    { id:3, name:'Galletas Chunky con Doble Chocolate (Docena)',     category:'Galletas',            description:'Galletas estilo Nueva York, suaves por dentro y doradas por fuera con trozos de chocolate belga', sale_price:8500,  yield_quantity:12, yield_unit:'galletas',   is_active:1 },
-    { id:4, name:'Tarta Sablé de Frutos Rojos',                      category:'Queques y Tartas',    description:'Base crocante de mantequilla rellena de suave crema pastelera a la vainilla y cubierta de berries frescos', sale_price:14500, yield_quantity:1, yield_unit:'tarta', is_active:1 },
-    { id:5, name:'Croissants Artesanales de Mantequilla (Pack x 4)', category:'Repostería Fina',     description:'Hojaldrado artesanal de capas perfectas con mantequilla pura al 82%',                            sale_price:6000,  yield_quantity:4,  yield_unit:'croissants', is_active:1 }
+    { id:1, name:'Queque de Zanahoria & Nuez con Frosting',         category:'Queques y Tartas',    description:'Bizcocho especiado con canela, nueces tostadas y cobertura suave de queso crema',               sale_price:16500, yield_quantity:1,  yield_unit:'queque',     raw_weight:950, raw_weight_unit:'g', is_active:1 },
+    { id:2, name:'Hogaza Rústica de Masa Madre',                     category:'Panadería Artesanal', description:'Fermentación lenta de 24 horas, corteza crujiente y miga abierta alveolada',                    sale_price:3800,  yield_quantity:1,  yield_unit:'hogaza',     raw_weight:550, raw_weight_unit:'g', is_active:1 },
+    { id:3, name:'Galletas Chunky con Doble Chocolate (Docena)',     category:'Galletas',            description:'Galletas estilo Nueva York, suaves por dentro y doradas por fuera con trozos de chocolate belga', sale_price:8500,  yield_quantity:12, yield_unit:'galletas',   raw_weight:75,  raw_weight_unit:'g', is_active:1 },
+    { id:4, name:'Tarta Sablé de Frutos Rojos',                      category:'Queques y Tartas',    description:'Base crocante de mantequilla rellena de suave crema pastelera a la vainilla y cubierta de berries frescos', sale_price:14500, yield_quantity:1, yield_unit:'tarta', raw_weight:800, raw_weight_unit:'g', is_active:1 },
+    { id:5, name:'Croissants Artesanales de Mantequilla (Pack x 4)', category:'Repostería Fina',     description:'Hojaldrado artesanal de capas perfectas con mantequilla pura al 82%',                            sale_price:6000,  yield_quantity:4,  yield_unit:'croissants', raw_weight:85,  raw_weight_unit:'g', is_active:1 }
   ].map(p => ({ ...p, created_at: ts, updated_at: ts }));
   await DB.setList('products', products);
 
@@ -380,20 +387,63 @@ const API = {
     const [products, recipes, ingredients] = await Promise.all([DB.getList('products'), DB.getList('recipes'), DB.getList('ingredients')]);
     const p = products.find(x => x.id == id);
     if (!p) throw new Error('Producto no encontrado');
+    const yieldQty = p.yield_quantity > 0 ? p.yield_quantity : 1;
     const recipeItems = recipes.filter(r => r.product_id == id).map(r => {
       const ing = ingredients.find(i => i.id === r.ingredient_id);
-      return { recipe_item_id: r.id, ingredient_id: r.ingredient_id, recipe_quantity: r.quantity, recipe_notes: r.notes, ingredient_name: ing ? ing.name : '—', ingredient_category: ing ? ing.category : '', ingredient_unit: ing ? ing.unit : '', cost_per_unit: ing ? ing.cost_per_unit : 0, current_stock: ing ? ing.current_stock : 0, ingredient_total_cost: ing ? r.quantity * ing.cost_per_unit : 0 };
+      const ingTotalCost = ing ? r.quantity * ing.cost_per_unit : 0;
+      const unitQty = Math.round((r.quantity / yieldQty) * 10000) / 10000;
+      const unitCost = Math.round((ingTotalCost / yieldQty) * 100) / 100;
+      return {
+        recipe_item_id: r.id,
+        ingredient_id: r.ingredient_id,
+        recipe_quantity: r.quantity,
+        unit_quantity: unitQty,
+        unit_cost: unitCost,
+        recipe_notes: r.notes,
+        ingredient_name: ing ? ing.name : '—',
+        ingredient_category: ing ? ing.category : '',
+        ingredient_unit: ing ? ing.unit : '',
+        cost_per_unit: ing ? ing.cost_per_unit : 0,
+        current_stock: ing ? ing.current_stock : 0,
+        ingredient_total_cost: Math.round(ingTotalCost * 100) / 100
+      };
     });
     const totalCost = recipeItems.reduce((s, i) => s + i.ingredient_total_cost, 0);
     const profit    = p.sale_price - totalCost;
     const pct       = p.sale_price > 0 ? (profit / p.sale_price) * 100 : 0;
-    return { ...p, recipe: recipeItems, total_recipe_cost: Math.round(totalCost * 100) / 100, unit_cost: p.yield_quantity > 0 ? Math.round((totalCost / p.yield_quantity) * 100) / 100 : totalCost, gross_profit: Math.round(profit * 100) / 100, profit_margin_pct: Math.round(pct * 10) / 10 };
+    const rawWeight = parseFloat(p.raw_weight) || 0;
+    const rawWeightUnit = p.raw_weight_unit || 'g';
+    const totalRawWeight = Math.round(rawWeight * yieldQty * 100) / 100;
+    return {
+      ...p,
+      raw_weight: rawWeight,
+      raw_weight_unit: rawWeightUnit,
+      total_raw_weight: totalRawWeight,
+      recipe: recipeItems,
+      total_recipe_cost: Math.round(totalCost * 100) / 100,
+      unit_cost: Math.round((totalCost / yieldQty) * 100) / 100,
+      gross_profit: Math.round(profit * 100) / 100,
+      profit_margin_pct: Math.round(pct * 10) / 10
+    };
   },
 
   async createProduct(data) {
     const [products, allRecipes] = await Promise.all([DB.getList('products'), DB.getList('recipes')]);
     const newId  = nextId(products);
-    const newProd = { id: newId, name: data.name.trim(), category: data.category.trim(), description: data.description || '', sale_price: parseFloat(data.sale_price) || 0, yield_quantity: parseFloat(data.yield_quantity) || 1, yield_unit: data.yield_unit || 'unidad', is_active: 1, created_at: DB.now(), updated_at: DB.now() };
+    const newProd = {
+      id: newId,
+      name: data.name.trim(),
+      category: data.category.trim(),
+      description: data.description || '',
+      sale_price: parseFloat(data.sale_price) || 0,
+      yield_quantity: parseFloat(data.yield_quantity) || 1,
+      yield_unit: data.yield_unit || 'unidad',
+      raw_weight: parseFloat(data.raw_weight) || 0,
+      raw_weight_unit: data.raw_weight_unit || 'g',
+      is_active: 1,
+      created_at: DB.now(),
+      updated_at: DB.now()
+    };
     products.push(newProd);
     await DB.setList('products', products);
     if (data.recipe && Array.isArray(data.recipe)) {
@@ -411,7 +461,18 @@ const API = {
     const idx = products.findIndex(p => p.id == id);
     if (idx < 0) throw new Error('Producto no encontrado');
     const cur = products[idx];
-    products[idx] = { ...cur, name: data.name !== undefined ? data.name.trim() : cur.name, category: data.category !== undefined ? data.category.trim() : cur.category, description: data.description !== undefined ? data.description : cur.description, sale_price: data.sale_price !== undefined ? parseFloat(data.sale_price) : cur.sale_price, yield_quantity: data.yield_quantity !== undefined ? parseFloat(data.yield_quantity) : cur.yield_quantity, yield_unit: data.yield_unit !== undefined ? data.yield_unit : cur.yield_unit, updated_at: DB.now() };
+    products[idx] = {
+      ...cur,
+      name: data.name !== undefined ? data.name.trim() : cur.name,
+      category: data.category !== undefined ? data.category.trim() : cur.category,
+      description: data.description !== undefined ? data.description : cur.description,
+      sale_price: data.sale_price !== undefined ? parseFloat(data.sale_price) : cur.sale_price,
+      yield_quantity: data.yield_quantity !== undefined ? parseFloat(data.yield_quantity) : cur.yield_quantity,
+      yield_unit: data.yield_unit !== undefined ? data.yield_unit : cur.yield_unit,
+      raw_weight: data.raw_weight !== undefined ? parseFloat(data.raw_weight) : (cur.raw_weight || 0),
+      raw_weight_unit: data.raw_weight_unit !== undefined ? data.raw_weight_unit : (cur.raw_weight_unit || 'g'),
+      updated_at: DB.now()
+    };
     await DB.setList('products', products);
     const [recipes, ingredients] = await Promise.all([DB.getList('recipes'), DB.getList('ingredients')]);
     return enrichProductSync(products[idx], recipes, ingredients);

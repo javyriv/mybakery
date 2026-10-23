@@ -231,29 +231,36 @@ function renderProductsList() {
       <div class="item-card-top">
         <div>
           <div class="item-card-title">${p.name}</div>
-          <div class="item-card-meta">${p.category} • Rendimiento base: ${p.yield_quantity} ${p.yield_unit}</div>
+          <div class="item-card-meta">
+            ${p.category} • Rendimiento: <strong>${p.yield_quantity} ${p.yield_unit}</strong>
+            ${p.raw_weight > 0 ? `• Masa cruda: <strong>${p.raw_weight} ${p.raw_weight_unit}</strong> c/u` : ''}
+          </div>
         </div>
         <span class="badge badge-mint">${UI.formatCurrency(p.sale_price)}</span>
       </div>
       <div class="item-card-details">
-        <div class="detail-pill">Costo Insumos: <strong>${UI.formatCurrency(p.total_recipe_cost)}</strong></div>
+        <div class="detail-pill">Costo Lote: <strong>${UI.formatCurrency(p.total_recipe_cost)}</strong></div>
+        <div class="detail-pill" style="border-color:var(--primary-300); background:var(--primary-50);">Costo/Unidad: <strong>${UI.formatCurrency(p.unit_cost)}</strong></div>
         <div class="detail-pill">Ganancia: <strong>${UI.formatCurrency(p.gross_profit)}</strong></div>
         <div class="detail-pill">Margen: <strong>${p.profit_margin_pct}%</strong></div>
         <div class="detail-pill">Ingredientes: <strong>${p.ingredients_count}</strong></div>
       </div>
       <div class="item-card-actions">
-        <button class="btn btn-secondary btn-sm" onclick="quickSelectProductForProjection(${p.id})">
-          <i class="ti ti-calculator"></i> Proyectar
+        <button class="btn btn-primary btn-sm" onclick="openRecipeQuotationModal(${p.id})">
+          <i class="ti ti-calculator"></i> Ver Receta & Cotizar
         </button>
         <button class="btn btn-secondary btn-sm" title="Editar Producto y Receta" onclick="openEditProductModal(${p.id})">
           <i class="ti ti-edit"></i> Editar
         </button>
+        <button class="btn btn-secondary btn-sm" onclick="quickSelectProductForProjection(${p.id})">
+          <i class="ti ti-flame"></i> Hornear
+        </button>
         ${p.ingredients_count > 0 ? `
         <button class="btn btn-secondary btn-sm" title="Vaciar ingredientes de la receta" onclick="confirmDeleteRecipe(${p.id}, '${escapeQuotes(p.name)}')">
-          <i class="ti ti-tools-kitchen-2-off"></i> Vaciar Receta
+          <i class="ti ti-tools-kitchen-2-off"></i> Vaciar
         </button>` : ''}
         <button class="btn btn-danger btn-sm" title="Eliminar Producto" onclick="confirmDeleteProduct(${p.id}, '${escapeQuotes(p.name)}')">
-          <i class="ti ti-trash"></i> Eliminar
+          <i class="ti ti-trash"></i>
         </button>
       </div>
     </div>
@@ -280,6 +287,9 @@ async function openEditProductModal(productId) {
     document.getElementById('prod-price-input').value = product.sale_price;
     document.getElementById('prod-yield-qty-input').value = product.yield_quantity || 1;
     document.getElementById('prod-yield-unit-input').value = product.yield_unit || 'unidad';
+    document.getElementById('prod-raw-weight-input').value = product.raw_weight || '';
+    document.getElementById('prod-raw-weight-unit-select').value = product.raw_weight_unit || 'g';
+    updateBatchWeightPreview();
     document.getElementById('prod-desc-input').value = product.description || '';
 
     // Llenar ingredientes de la receta existente
@@ -1135,10 +1145,33 @@ function openNewProductModal() {
   document.getElementById('modal-product-title').innerHTML = '<i class="ti ti-cake"></i> Nuevo Producto & Receta';
   document.getElementById('btn-save-product').innerHTML = '<i class="ti ti-check"></i> Registrar Producto y Receta';
 
+  document.getElementById('prod-raw-weight-input').value = '';
+  document.getElementById('prod-raw-weight-unit-select').value = 'g';
+  updateBatchWeightPreview();
+
   AppState.recipeItemsBuilder = [];
   document.getElementById('recipe-items-builder').innerHTML = '';
   addRecipeItemRow();
   UI.openModal('modal-new-product');
+}
+
+function updateBatchWeightPreview() {
+  const qty = parseFloat(document.getElementById('prod-yield-qty-input')?.value) || 0;
+  const unit = document.getElementById('prod-yield-unit-input')?.value || 'unidad';
+  const rawWeight = parseFloat(document.getElementById('prod-raw-weight-input')?.value) || 0;
+  const weightUnit = document.getElementById('prod-raw-weight-unit-select')?.value || 'g';
+  const previewEl = document.getElementById('prod-batch-weight-preview');
+  const textEl = document.getElementById('batch-weight-text');
+
+  if (previewEl && textEl) {
+    if (rawWeight > 0 && qty > 0) {
+      const totalWeight = Math.round(qty * rawWeight * 100) / 100;
+      textEl.textContent = `${totalWeight} ${weightUnit} (${qty} ${unit} × ${rawWeight} ${weightUnit} c/u)`;
+      previewEl.style.display = 'block';
+    } else {
+      previewEl.style.display = 'none';
+    }
+  }
 }
 
 function addRecipeItemRow(preselectedIngredientId = null, preselectedQty = 0.1) {
@@ -1172,6 +1205,8 @@ async function submitNewProduct(e) {
   const price = parseFloat(document.getElementById('prod-price-input').value) || 0;
   const yieldQty = parseFloat(document.getElementById('prod-yield-qty-input').value) || 1;
   const yieldUnit = document.getElementById('prod-yield-unit-input').value || 'unidad';
+  const rawWeight = parseFloat(document.getElementById('prod-raw-weight-input').value) || 0;
+  const rawWeightUnit = document.getElementById('prod-raw-weight-unit-select').value || 'g';
   const desc = document.getElementById('prod-desc-input').value;
 
   const recipe = [];
@@ -1189,13 +1224,13 @@ async function submitNewProduct(e) {
   try {
     if (editId) {
       await API.updateProduct(editId, {
-        name, category, sale_price: price, yield_quantity: yieldQty, yield_unit: yieldUnit, description: desc
+        name, category, sale_price: price, yield_quantity: yieldQty, yield_unit: yieldUnit, raw_weight: rawWeight, raw_weight_unit: rawWeightUnit, description: desc
       });
       await API.saveRecipe(editId, recipe);
       UI.showToast('Producto y receta actualizados con éxito', 'success');
     } else {
       await API.createProduct({
-        name, category, sale_price: price, yield_quantity: yieldQty, yield_unit: yieldUnit, description: desc, recipe
+        name, category, sale_price: price, yield_quantity: yieldQty, yield_unit: yieldUnit, raw_weight: rawWeight, raw_weight_unit: rawWeightUnit, description: desc, recipe
       });
       UI.showToast('Producto y receta guardados con éxito', 'success');
     }
@@ -1317,4 +1352,293 @@ function shareTicketWhatsApp() {
   const text = `Hola ${order.customer_name}, te enviamos el comprobante de tu pedido en *Dulce Menta* 🥖%0A%0A*Pedido:* #${order.order_number}%0A*Fecha de Entrega:* ${UI.formatDate(order.delivery_date)} ${order.delivery_time || ''}%0A%0A*Detalle:*%0A${itemsText}%0A%0A*Total:* ${UI.formatCurrency(order.total_amount)}%0A*Abonado:* ${UI.formatCurrency(order.total_paid)}%0A*Saldo Pendiente:* ${UI.formatCurrency(order.pending_balance)}%0A%0A¡Muchas gracias por tu preferencia!`;
 
   window.open(`https://wa.me/${cleanPhone}?text=${text}`, '_blank');
+}
+
+// ==================== MÓDULO DE COTIZACIONES & FICHA TÉCNICA DE RECETAS ====================
+let activeQuotationProduct = null;
+
+async function openRecipeQuotationModal(productId) {
+  try {
+    const product = await API.getProduct(productId);
+    activeQuotationProduct = product;
+    
+    document.getElementById('modal-recipe-title').innerHTML = 
+      `<i class="ti ti-tools-kitchen-2"></i> ${product.name} — Ficha Técnica & Cotizador`;
+    
+    const body = document.getElementById('modal-recipe-body');
+    const yieldQty = product.yield_quantity || 1;
+    const rawWeight = product.raw_weight || 0;
+    const rawUnit = product.raw_weight_unit || 'g';
+    const totalRaw = product.total_raw_weight || (rawWeight * yieldQty);
+
+    body.innerHTML = `
+      <!-- Encabezado y Métricas Técnicas -->
+      <div style="background:var(--cream-50); border:1px solid var(--cream-200); border-radius:var(--radius-md); padding:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
+          <div>
+            <span class="badge badge-mint" style="margin-bottom:4px;">${product.category}</span>
+            <div style="font-size:13px; color:var(--cream-700);">${product.description || 'Sin descripción adicional.'}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:11px; text-transform:uppercase; color:var(--cream-500); font-weight:700;">Precio de Venta Sugerido</div>
+            <div style="font-size:20px; font-weight:800; color:var(--primary-700);">${UI.formatCurrency(product.sale_price)}</div>
+          </div>
+        </div>
+
+        <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap:8px;">
+          <div style="background:#fff; padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--cream-200);">
+            <div style="font-size:11px; color:var(--cream-600); font-weight:600;">Rendimiento Base</div>
+            <div style="font-size:15px; font-weight:800; color:var(--primary-900);">${yieldQty} ${product.yield_unit}</div>
+          </div>
+          <div style="background:#fff; padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--cream-200);">
+            <div style="font-size:11px; color:var(--cream-600); font-weight:600;">Peso Neto Sin Hornear</div>
+            <div style="font-size:15px; font-weight:800; color:var(--primary-900);">
+              ${rawWeight > 0 ? `${rawWeight} ${rawUnit} <span style="font-size:11px; font-weight:400; color:var(--cream-500);">/unidad</span>` : 'No def.'}
+            </div>
+            ${totalRaw > 0 ? `<div style="font-size:10px; color:var(--cream-600);">Lote base: ${totalRaw} ${rawUnit}</div>` : ''}
+          </div>
+          <div style="background:#fff; padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--cream-200);">
+            <div style="font-size:11px; color:var(--cream-600); font-weight:600;">Costo Insumos Unitario</div>
+            <div style="font-size:15px; font-weight:800; color:var(--danger);">${UI.formatCurrency(product.unit_cost)}</div>
+            <div style="font-size:10px; color:var(--cream-600);">Lote completo: ${UI.formatCurrency(product.total_recipe_cost)}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabla de Desglose de Insumos: Receta Base vs Por Unidad -->
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <h4 style="margin:0; font-size:14px; font-weight:700; color:var(--primary-950);">
+            <i class="ti ti-list-details"></i> Desglose de Ingredientes por Unidad (Base para Cotizaciones)
+          </h4>
+          <span style="font-size:11px; background:var(--primary-100); color:var(--primary-900); padding:2px 8px; border-radius:10px; font-weight:600;">
+            1 ${product.yield_unit}
+          </span>
+        </div>
+
+        <div style="border:1px solid var(--cream-200); border-radius:var(--radius-md); overflow:hidden; background:#fff;">
+          <table style="width:100%; border-collapse:collapse; font-size:12px; text-align:left;">
+            <thead>
+              <tr style="background:var(--cream-100); color:var(--cream-800); border-bottom:1px solid var(--cream-200);">
+                <th style="padding:8px 10px;">Insumo / Materia Prima</th>
+                <th style="padding:8px 10px; text-align:center;">Receta Base (${yieldQty} ${product.yield_unit})</th>
+                <th style="padding:8px 10px; text-align:center; background:var(--primary-50); color:var(--primary-900); font-weight:700;">Por Unidad (1 ${product.yield_unit})</th>
+                <th style="padding:8px 10px; text-align:right;">Costo / Unidad</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(product.recipe && product.recipe.length > 0) ? product.recipe.map(r => `
+                <tr style="border-bottom:1px solid var(--cream-100);">
+                  <td style="padding:8px 10px;">
+                    <strong>${r.ingredient_name}</strong>
+                    <div style="font-size:10px; color:var(--cream-500);">${r.ingredient_category}</div>
+                  </td>
+                  <td style="padding:8px 10px; text-align:center; color:var(--cream-700);">
+                    ${r.recipe_quantity} ${r.ingredient_unit}
+                  </td>
+                  <td style="padding:8px 10px; text-align:center; background:var(--primary-50); font-weight:700; color:var(--primary-900);">
+                    ${r.unit_quantity} ${r.ingredient_unit}
+                  </td>
+                  <td style="padding:8px 10px; text-align:right; font-weight:600; color:var(--cream-800);">
+                    ${UI.formatCurrency(r.unit_cost)}
+                  </td>
+                </tr>
+              `).join('') : `
+                <tr>
+                  <td colspan="4" style="text-align:center; padding:16px; color:var(--cream-500);">
+                    Este producto no tiene ingredientes configurados en su receta.
+                  </td>
+                </tr>
+              `}
+            </tbody>
+            <tfoot>
+              <tr style="background:var(--cream-50); font-weight:700; border-top:2px solid var(--cream-300);">
+                <td style="padding:8px 10px;" colspan="2">TOTAL MATERIA PRIMA POR UNIDAD:</td>
+                <td style="padding:8px 10px; text-align:center; background:var(--primary-100); color:var(--primary-950);">
+                  ${rawWeight > 0 ? `${rawWeight} ${rawUnit}` : '1 ' + product.yield_unit}
+                </td>
+                <td style="padding:8px 10px; text-align:right; color:var(--danger); font-size:13px;">
+                  ${UI.formatCurrency(product.unit_cost)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- Cotizador Dinámico de Pedidos -->
+      <div style="background:linear-gradient(135deg, var(--primary-900), var(--primary-800)); color:#fff; border-radius:var(--radius-md); padding:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <div>
+            <div style="font-size:15px; font-weight:800; display:flex; align-items:center; gap:6px;">
+              <i class="ti ti-calculator"></i> Cotizador Rápido de Encargos
+            </div>
+            <div style="font-size:11px; opacity:0.85;">Calcula insumos requeridos, peso y precio para clientes</div>
+          </div>
+          <span class="badge" style="background:rgba(255,255,255,0.2); color:#fff;">Calculado por Unidad</span>
+        </div>
+
+        <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-bottom:12px;">
+          <label style="font-size:13px; font-weight:600;">Unidades a Cotizar:</label>
+          <input type="number" id="quote-qty-input" class="form-control" value="10" min="1" step="1" 
+                 style="width:90px; height:36px; text-align:center; font-weight:800; font-size:15px; color:#111;" 
+                 oninput="calculateQuotationLive()">
+          <div style="display:flex; gap:4px;">
+            <button type="button" class="btn btn-sm" style="background:rgba(255,255,255,0.25); color:#fff; padding:4px 8px; font-size:11px;" onclick="setQuoteQty(1)">1</button>
+            <button type="button" class="btn btn-sm" style="background:rgba(255,255,255,0.25); color:#fff; padding:4px 8px; font-size:11px;" onclick="setQuoteQty(6)">6</button>
+            <button type="button" class="btn btn-sm" style="background:rgba(255,255,255,0.25); color:#fff; padding:4px 8px; font-size:11px;" onclick="setQuoteQty(12)">12</button>
+            <button type="button" class="btn btn-sm" style="background:rgba(255,255,255,0.25); color:#fff; padding:4px 8px; font-size:11px;" onclick="setQuoteQty(25)">25</button>
+            <button type="button" class="btn btn-sm" style="background:rgba(255,255,255,0.25); color:#fff; padding:4px 8px; font-size:11px;" onclick="setQuoteQty(50)">50</button>
+            <button type="button" class="btn btn-sm" style="background:rgba(255,255,255,0.25); color:#fff; padding:4px 8px; font-size:11px;" onclick="setQuoteQty(100)">100</button>
+          </div>
+        </div>
+
+        <!-- Tarjetas de Resultado de Cotización -->
+        <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:8px; margin-bottom:14px;">
+          <div style="background:rgba(255,255,255,0.12); padding:8px 10px; border-radius:var(--radius-sm);">
+            <div style="font-size:10px; opacity:0.8;">Masa Cruda Requerida</div>
+            <div id="quote-res-weight" style="font-size:14px; font-weight:800;">—</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.12); padding:8px 10px; border-radius:var(--radius-sm);">
+            <div style="font-size:10px; opacity:0.8;">Costo Total Insumos</div>
+            <div id="quote-res-cost" style="font-size:14px; font-weight:800; color:#FCA5A5;">₡0</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.12); padding:8px 10px; border-radius:var(--radius-sm);">
+            <div style="font-size:10px; opacity:0.8;">Precio Sugerido Venta</div>
+            <div id="quote-res-total" style="font-size:14px; font-weight:800; color:#A7F3D0;">₡0</div>
+          </div>
+          <div style="background:rgba(255,255,255,0.12); padding:8px 10px; border-radius:var(--radius-sm);">
+            <div style="font-size:10px; opacity:0.8;">Utilidad Estimada</div>
+            <div id="quote-res-profit" style="font-size:14px; font-weight:800;">₡0</div>
+          </div>
+        </div>
+
+        <!-- Botones de Acción de Cotización -->
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="btn btn-block" style="background:#25D366; color:#fff; font-weight:700;" onclick="copyQuotationWhatsApp()">
+            <i class="ti ti-brand-whatsapp"></i> Copiar Cotización WhatsApp
+          </button>
+          <button type="button" class="btn btn-secondary btn-block" style="background:#fff; color:var(--primary-950); font-weight:700;" onclick="createOrderFromQuotation()">
+            <i class="ti ti-plus"></i> Crear Pedido con Esta Cotización
+          </button>
+        </div>
+      </div>
+    `;
+
+    calculateQuotationLive();
+    UI.openModal('modal-recipe-quotation');
+  } catch (err) {
+    UI.showToast(err.message, 'error');
+  }
+}
+
+function setQuoteQty(n) {
+  const input = document.getElementById('quote-qty-input');
+  if (input) {
+    input.value = n;
+    calculateQuotationLive();
+  }
+}
+
+function calculateQuotationLive() {
+  if (!activeQuotationProduct) return;
+  const p = activeQuotationProduct;
+  const qtyInput = document.getElementById('quote-qty-input');
+  const qty = parseFloat(qtyInput?.value) || 0;
+
+  const rawWeight = p.raw_weight || 0;
+  const rawUnit = p.raw_weight_unit || 'g';
+  const totalWeightNum = qty * rawWeight;
+  let weightStr = '—';
+  if (rawWeight > 0) {
+    if (rawUnit === 'g' && totalWeightNum >= 1000) {
+      weightStr = `${(totalWeightNum / 1000).toFixed(2)} kg (${totalWeightNum.toFixed(0)} g)`;
+    } else {
+      weightStr = `${totalWeightNum.toFixed(1)} ${rawUnit}`;
+    }
+  }
+
+  const totalCost = qty * (p.unit_cost || 0);
+  const totalRevenue = qty * (p.sale_price || 0);
+  const profit = totalRevenue - totalCost;
+  const marginPct = totalRevenue > 0 ? ((profit / totalRevenue) * 100).toFixed(1) : '0';
+
+  const wEl = document.getElementById('quote-res-weight');
+  const cEl = document.getElementById('quote-res-cost');
+  const tEl = document.getElementById('quote-res-total');
+  const pEl = document.getElementById('quote-res-profit');
+
+  if (wEl) wEl.textContent = weightStr;
+  if (cEl) cEl.textContent = UI.formatCurrency(totalCost);
+  if (tEl) tEl.textContent = UI.formatCurrency(totalRevenue);
+  if (pEl) pEl.textContent = `${UI.formatCurrency(profit)} (${marginPct}%)`;
+}
+
+function copyQuotationWhatsApp() {
+  if (!activeQuotationProduct) return;
+  const p = activeQuotationProduct;
+  const qty = parseFloat(document.getElementById('quote-qty-input')?.value) || 1;
+  const rawWeight = p.raw_weight || 0;
+  const rawUnit = p.raw_weight_unit || 'g';
+  const totalCost = qty * (p.unit_cost || 0);
+  const totalRevenue = qty * (p.sale_price || 0);
+  
+  let weightNote = '';
+  if (rawWeight > 0) {
+    const totalW = qty * rawWeight;
+    const wText = (rawUnit === 'g' && totalW >= 1000) ? `${(totalW/1000).toFixed(2)} kg` : `${totalW} ${rawUnit}`;
+    weightNote = `\n⚖️ Peso crudo estimado: ${rawWeight} ${rawUnit} por pieza (Total lote: ${wText})`;
+  }
+
+  const text = `🥖 *COTIZACIÓN — DULCE MENTA BAKERY*
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧁 *Producto:* ${p.name}
+📦 *Cantidad:* ${qty} ${p.yield_unit || 'unidades'}${weightNote}
+💰 *Precio Unitario:* ${UI.formatCurrency(p.sale_price)}
+💵 *TOTAL COTIZADO:* ${UI.formatCurrency(totalRevenue)}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✨ *Elaborado con materia prima 100% artesanal.*
+📲 Para confirmar tu pedido, respóndenos a este mensaje. ¡Gracias por preferir Dulce Menta!`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(() => {
+      UI.showToast('¡Cotización copiada al portapapeles para WhatsApp!', 'success');
+    }).catch(() => {
+      prompt('Copia el texto de la cotización:', text);
+    });
+  } else {
+    prompt('Copia el texto de la cotización:', text);
+  }
+}
+
+function createOrderFromQuotation() {
+  if (!activeQuotationProduct) return;
+  const p = activeQuotationProduct;
+  const qty = parseFloat(document.getElementById('quote-qty-input')?.value) || 1;
+  
+  UI.closeModal('modal-recipe-quotation');
+  openNewOrderModal();
+  
+  // Agregar el producto cotizado a la lista de ítems del pedido
+  setTimeout(() => {
+    const builder = document.getElementById('order-items-builder');
+    if (builder) {
+      builder.innerHTML = '';
+      AppState.orderItemsBuilder = [];
+      addOrderItemRow();
+      const firstRow = document.querySelector('#order-items-builder .order-item-row');
+      if (firstRow) {
+        const prodSelect = firstRow.querySelector('.order-item-product');
+        const qtyInput = firstRow.querySelector('.order-item-qty');
+        if (prodSelect) {
+          prodSelect.value = p.id;
+          updateOrderItemPrice(0);
+        }
+        if (qtyInput) {
+          qtyInput.value = qty;
+          updateOrderTotals();
+        }
+      }
+    }
+  }, 200);
 }
