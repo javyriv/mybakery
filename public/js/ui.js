@@ -90,10 +90,6 @@ const UI = {
 window.openModal = function(modalId) { UI.openModal(modalId); };
 window.closeModal = function(modalId) { UI.closeModal(modalId); };
 
-// Cerrar modales haciendo click fuera del sheet
-document.addEventListener('click', (e) => {
-  if (e.target.classList.contains('modal-overlay')) {
-    e.target.classList.remove('open');
-    document.body.style.overflow = '';
-  }
-});
+// NOTA: Se deshabilita el cierre al hacer click fuera del sheet para evitar
+// pérdida accidental de datos al seleccionar texto o hacer click fuera.
+// Las ventanas ahora solo se cierran explícitamente mediante Aceptar, Cancelar o Cerrar (×).
