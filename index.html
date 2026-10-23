@@ -240,7 +240,10 @@
       <div class="card">
         <div class="card-header">
           <div class="card-title"><i class="ti ti-clipboard-list"></i> Gestión de Pedidos & Agenda</div>
-          <button class="btn btn-primary btn-sm" onclick="openNewOrderModal()"><i class="ti ti-plus"></i> Tomar Pedido</button>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="switchView('metrics')" title="Ver estado de pedidos por producto en Finanzas"><i class="ti ti-chart-pie"></i> Resumen x Producto</button>
+            <button class="btn btn-primary btn-sm" onclick="openNewOrderModal()"><i class="ti ti-plus"></i> Tomar Pedido</button>
+          </div>
         </div>
 
         <div class="filter-tabs">
@@ -329,11 +332,48 @@
           </div>
         </div>
 
-        <div style="background:#fff; border-radius:var(--radius-md); padding:16px; border:1px solid var(--cream-200);">
+        <div style="background:#fff; border-radius:var(--radius-md); padding:16px; border:1px solid var(--cream-200); margin-bottom:16px;">
           <h4 style="font-size:14px; font-weight:700; color:var(--cream-800); margin-bottom:12px;">
             <i class="ti ti-award"></i> Productos Más Vendidos
           </h4>
           <div id="metrics-top-products-list"></div>
+        </div>
+
+        <!-- TABLA: ESTADO DE PEDIDOS POR PRODUCTO (ENTREGADOS VS PENDIENTES) -->
+        <div style="background:#fff; border-radius:var(--radius-md); padding:16px; border:1px solid var(--cream-200);">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+            <div>
+              <h4 style="font-size:15px; font-weight:700; color:var(--cream-800); margin:0; display:flex; align-items:center; gap:6px;">
+                <i class="ti ti-layout-kanban" style="color:var(--primary-600); font-size:18px;"></i> Estado de Pedidos por Producto
+              </h4>
+              <p style="font-size:12px; color:var(--cream-600); margin:2px 0 0 0;">
+                Resumen de unidades entregadas vs. pendientes de entrega por receta o producto
+              </p>
+            </div>
+            <div class="filter-tabs" style="margin-bottom:0;">
+              <button class="tab-chip active" id="prod-status-chip-all" onclick="filterProductStatusView('all')">Todos</button>
+              <button class="tab-chip" id="prod-status-chip-pending" onclick="filterProductStatusView('pending')">🕒 Con Pendientes</button>
+              <button class="tab-chip" id="prod-status-chip-delivered" onclick="filterProductStatusView('delivered')">✅ Completados</button>
+            </div>
+          </div>
+
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; min-width:620px; font-size:13px;">
+              <thead>
+                <tr style="border-bottom:2px solid var(--cream-200); background:var(--cream-50); color:var(--cream-800); text-transform:uppercase; font-size:11px; letter-spacing:0.5px;">
+                  <th style="padding:10px 12px; text-align:left;">Producto</th>
+                  <th style="padding:10px 8px; text-align:center;">Total Pedido</th>
+                  <th style="padding:10px 8px; text-align:center;">Entregados</th>
+                  <th style="padding:10px 8px; text-align:center;">Pendientes Entrega</th>
+                  <th style="padding:10px 12px; text-align:right;">Total Ventas</th>
+                  <th style="padding:10px 12px; text-align:right;">Saldo x Entregar</th>
+                </tr>
+              </thead>
+              <tbody id="metrics-product-status-tbody">
+                <!-- Se llena dinámicamente -->
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>
@@ -950,8 +990,8 @@
   <!-- Firebase SDK Compat -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="js/api.js?v=4"></script>
-  <script src="js/ui.js?v=4"></script>
-  <script src="js/app.js?v=4"></script>
+  <script src="js/api.js?v=5"></script>
+  <script src="js/ui.js?v=5"></script>
+  <script src="js/app.js?v=5"></script>
 </body>
 </html>

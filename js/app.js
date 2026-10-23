@@ -906,11 +906,102 @@ async function loadMetrics(period = 'month') {
       `).join('');
     }
 
+    // Resumen de estado de pedidos por producto
+    currentProductStatusList = data.products_order_status || [];
+    renderProductStatusTable();
+
     // Gráfico Chart.js
     renderSalesCostChart(data.daily_chart);
   } catch (err) {
     UI.showToast(err.message, 'error');
   }
+}
+
+let currentProductStatusList = [];
+let activeProductStatusFilter = 'all';
+
+function renderProductStatusTable() {
+  const tbody = document.getElementById('metrics-product-status-tbody');
+  if (!tbody) return;
+
+  let list = currentProductStatusList || [];
+  if (activeProductStatusFilter === 'pending') {
+    list = list.filter(p => p.pending_units > 0);
+  } else if (activeProductStatusFilter === 'delivered') {
+    list = list.filter(p => p.pending_units === 0 && p.delivered_units > 0);
+  }
+
+  if (list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align:center; padding:24px; color:var(--cream-500); font-size:13px;">
+          No hay pedidos registrados para este período o filtro seleccionado.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = list.map(item => {
+    const hasPending = item.pending_units > 0;
+
+    const details = [];
+    if (item.status_pending > 0) details.push(`<span title="Pendiente de hornear" style="color:#d97706; font-weight:600;">🕒 ${item.status_pending} pend.</span>`);
+    if (item.status_baking > 0) details.push(`<span title="En preparación / horno" style="color:#ea580c; font-weight:600;">👨‍🍳 ${item.status_baking} horno</span>`);
+    if (item.status_ready > 0) details.push(`<span title="Listo para entregar" style="color:#0284c7; font-weight:600;">📦 ${item.status_ready} listo</span>`);
+    const detailsHtml = details.length > 0 ? `<div style="font-size:10px; margin-top:3px; display:flex; justify-content:center; gap:6px; flex-wrap:wrap;">${details.join('')}</div>` : '';
+
+    return `
+      <tr style="border-bottom:1px solid var(--cream-100); transition:background 0.15s;" onmouseover="this.style.background='var(--cream-50)'" onmouseout="this.style.background='transparent'">
+        <td style="padding:10px 12px;">
+          <div style="font-weight:700; color:var(--cream-900); font-size:13px;">${item.name}</div>
+          <div style="font-size:11px; color:var(--cream-500);">${item.category} • ${item.orders_count} pedido(s)</div>
+        </td>
+        <td style="padding:10px 8px; text-align:center;">
+          <span style="font-weight:700; font-size:12px; color:var(--primary-900); background:var(--primary-50); padding:3px 8px; border-radius:6px; border:1px solid var(--primary-200); display:inline-block;">
+            ${item.total_units} ${item.yield_unit || 'unid'}
+          </span>
+        </td>
+        <td style="padding:10px 8px; text-align:center;">
+          ${item.delivered_units > 0 
+            ? `<span style="font-weight:700; font-size:12px; color:#065f46; background:#ecfdf5; padding:3px 8px; border-radius:6px; border:1px solid #a7f3d0; display:inline-block;">
+                 <i class="ti ti-check"></i> ${item.delivered_units}
+               </span>`
+            : `<span style="color:var(--cream-400); font-size:12px;">0</span>`
+          }
+        </td>
+        <td style="padding:10px 8px; text-align:center;">
+          ${hasPending 
+            ? `<div>
+                 <span style="font-weight:700; font-size:12px; color:#9a3412; background:#fff7ed; padding:3px 8px; border-radius:6px; border:1px solid #fed7aa; display:inline-block;">
+                   ⏳ ${item.pending_units} pendientes
+                 </span>
+                 ${detailsHtml}
+               </div>`
+            : `<span style="color:var(--success); font-weight:700; font-size:12px;"><i class="ti ti-circle-check"></i> Completado</span>`
+          }
+        </td>
+        <td style="padding:10px 12px; text-align:right; font-weight:700; color:var(--primary-950);">
+          ${UI.formatCurrency(item.total_revenue)}
+        </td>
+        <td style="padding:10px 12px; text-align:right;">
+          ${item.pending_revenue > 0 
+            ? `<span style="font-weight:700; color:#dc2626;">${UI.formatCurrency(item.pending_revenue)}</span>`
+            : `<span style="color:var(--success); font-weight:600;">₡0</span>`
+          }
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function filterProductStatusView(filter) {
+  activeProductStatusFilter = filter;
+  ['all', 'pending', 'delivered'].forEach(f => {
+    const chip = document.getElementById(`prod-status-chip-${f}`);
+    if (chip) chip.classList.toggle('active', f === filter);
+  });
+  renderProductStatusTable();
 }
 
 function renderSalesCostChart(dailyData) {

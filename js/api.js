@@ -941,6 +941,58 @@ const API = {
       productRevMap[item.product_id].total_cost    += item.unit_cost * item.quantity;
       productRevMap[item.product_id].profit        += item.subtotal - item.unit_cost * item.quantity;
     });
+    const productStatusMap = {};
+    orderItems.forEach(item => {
+      const ord = filtered.find(o => o.id == item.order_id);
+      if (!ord || ord.status === 'CANCELADO') return;
+      const prod = products.find(p => p.id === item.product_id);
+      if (!prod) return;
+
+      if (!productStatusMap[prod.id]) {
+        productStatusMap[prod.id] = {
+          id: prod.id,
+          name: prod.name,
+          category: prod.category,
+          yield_unit: prod.yield_unit || 'unidad',
+          orders_count: 0,
+          total_units: 0,
+          delivered_units: 0,
+          pending_units: 0,
+          status_pending: 0,
+          status_baking: 0,
+          status_ready: 0,
+          total_revenue: 0,
+          delivered_revenue: 0,
+          pending_revenue: 0,
+          _orders: {}
+        };
+      }
+
+      const pStat = productStatusMap[prod.id];
+      const qty = item.quantity;
+      const subtotal = item.subtotal;
+
+      pStat._orders[ord.id] = true;
+      pStat.total_units += qty;
+      pStat.total_revenue += subtotal;
+
+      if (ord.status === 'ENTREGADO') {
+        pStat.delivered_units += qty;
+        pStat.delivered_revenue += subtotal;
+      } else if (['PENDIENTE', 'EN_PREPARACION', 'LISTO'].includes(ord.status)) {
+        pStat.pending_units += qty;
+        pStat.pending_revenue += subtotal;
+        if (ord.status === 'PENDIENTE') pStat.status_pending += qty;
+        else if (ord.status === 'EN_PREPARACION') pStat.status_baking += qty;
+        else if (ord.status === 'LISTO') pStat.status_ready += qty;
+      }
+    });
+
+    const productsOrderStatus = Object.values(productStatusMap).map(p => {
+      const { _orders, ...rest } = p;
+      return { ...rest, orders_count: Object.keys(_orders).length };
+    }).sort((a, b) => (b.pending_units - a.pending_units) || (b.total_units - a.total_units));
+
     const dailyChart = [];
     for (let i = 6; i >= 0; i--) {
       const d = DB.dayOffset(-i);
@@ -953,6 +1005,7 @@ const API = {
       inventory: { total_ingredients: ingredients.length, low_stock_count: ingredients.filter(i => i.current_stock <= i.min_stock).length, total_inventory_value: Math.round(ingredients.reduce((s, i) => s + i.current_stock * i.cost_per_unit, 0)*100)/100 },
       status_breakdown: Object.values(statusMap),
       top_products: Object.values(productRevMap).sort((a, b) => b.units_sold - a.units_sold).slice(0, 5),
+      products_order_status: productsOrderStatus,
       daily_chart: dailyChart
     };
   },
