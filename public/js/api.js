@@ -77,6 +77,14 @@ const API = {
   // Pagos y Abonos
   addPayment: (data) => API.request('/payments', { method: 'POST', body: JSON.stringify(data) }),
 
+  // Autenticación & Usuarios
+  login: (data) => API.request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+  getUsers: () => API.request('/users'),
+  getUser: (id) => API.request(`/users/${id}`),
+  createUser: (data) => API.request('/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (id, data) => API.request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteUser: (id) => API.request(`/users/${id}`, { method: 'DELETE' }),
+
   // Finanzas y Métricas
   getMetrics: (period = 'month') => API.request(`/metrics?period=${period}`),
   getSettings: () => API.request('/settings')

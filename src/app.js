@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
@@ -10,6 +10,8 @@ const ordersRoutes = require('./routes/orders');
 const paymentsRoutes = require('./routes/payments');
 const metricsRoutes = require('./routes/metrics');
 const settingsRoutes = require('./routes/settings');
+const authRoutes = require('./routes/auth');
+const usersRoutes = require('./routes/users');
 
 const app = express();
 
@@ -22,6 +24,8 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '../public')));
 
 // Enrutamiento de la API REST
+app.use('/api/auth', authRoutes);
+app.use('/api/users', usersRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/production', productionRoutes);

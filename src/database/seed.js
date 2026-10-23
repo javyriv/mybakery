@@ -18,6 +18,9 @@ function seedDatabase() {
         run('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, val]);
     }
 
+    // 2. Usuario administrador general inicial
+    seedUsers();
+
     // Verificar si ya hay ingredientes cargados
     const existingIng = query('SELECT COUNT(*) as count FROM ingredients');
     if (existingIng[0].count > 0) {
@@ -237,8 +240,24 @@ function seedDatabase() {
     console.log('✅ Base de datos sembrada con éxito con catálogo, recetas, inventario y pedidos de ejemplo.');
 }
 
+function seedUsers() {
+    try {
+        const adminUser = query("SELECT * FROM users WHERE username = 'admin'");
+        if (adminUser.length === 0) {
+            run(`
+                INSERT INTO users (name, username, password, role, status)
+                VALUES ('Administrador General', 'admin', 'None123.', 'ADMIN', 'ACTIVO')
+            `);
+            console.log('👤 Usuario administrador general creado: admin / None123.');
+        }
+    } catch (err) {
+        console.error('Error al sembrar usuario administrador:', err);
+    }
+}
+
 if (require.main === module) {
     seedDatabase();
 }
 
-module.exports = { seedDatabase };
+module.exports = { seedDatabase, seedUsers };
+

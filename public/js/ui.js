@@ -83,6 +83,19 @@ const UI = {
       default:
         return `<span class="badge badge-neutral">${paymentStatus}</span>`;
     }
+  },
+
+  getUserRoleBadge(role) {
+    switch (role) {
+      case 'ADMIN':
+        return '<span class="badge badge-mint"><i class="ti ti-crown"></i> Administrador</span>';
+      case 'PASTELERO':
+        return '<span class="badge badge-warning"><i class="ti ti-tools-kitchen-2"></i> Pastelero / Panadero</span>';
+      case 'VENTAS':
+        return '<span class="badge badge-info"><i class="ti ti-tag"></i> Ventas & Caja</span>';
+      default:
+        return `<span class="badge badge-neutral">${role}</span>`;
+    }
   }
 };
 

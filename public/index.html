@@ -43,9 +43,22 @@
       <button class="nav-item" id="dnav-metrics" onclick="switchView('metrics')">
         <i class="ti ti-chart-bar"></i> Finanzas
       </button>
+      <button class="nav-item" id="dnav-users" onclick="switchView('users')">
+        <i class="ti ti-users-group"></i> Usuarios
+      </button>
     </nav>
 
     <div class="header-actions">
+      <div class="user-header-pill" id="header-user-profile" style="display:none; align-items:center; gap:8px; background:var(--cream-100); border:1px solid var(--cream-300); padding:4px 10px; border-radius:var(--radius-full);">
+        <i class="ti ti-user-circle" style="font-size:22px; color:var(--primary-700);"></i>
+        <div style="line-height:1.2;">
+          <span id="header-user-name" style="font-size:12px; font-weight:700; color:var(--cream-900); display:block;">Admin</span>
+          <span id="header-user-role" class="badge badge-mint" style="font-size:9px; padding:1px 6px;">ADMIN</span>
+        </div>
+        <button class="btn btn-secondary btn-sm btn-icon" style="min-height:28px; width:28px; margin-left:4px;" title="Cerrar Sesión" onclick="logoutUser()">
+          <i class="ti ti-logout"></i>
+        </button>
+      </div>
       <button class="header-badge-btn" title="Alertas de Inventario" onclick="switchView('inventory', 'ALERTS')">
         <i class="ti ti-bell"></i>
         <span class="badge-dot" id="header-alert-count" style="display:none;">0</span>
@@ -309,6 +322,21 @@
         </div>
       </div>
     </section>
+
+    <!-- VISTA 7: USUARIOS Y ACCESOS -->
+    <section id="view-users" class="app-view">
+      <div class="view-header">
+        <div>
+          <h2><i class="ti ti-users-group"></i> Gestión de Usuarios & Accesos</h2>
+          <p>Administra las cuentas de acceso y roles del personal del sistema</p>
+        </div>
+        <button class="btn btn-primary" onclick="openNewUserModal()">
+          <i class="ti ti-user-plus"></i> Nuevo Usuario
+        </button>
+      </div>
+
+      <div id="users-list-container" class="items-list-grid"></div>
+    </section>
   </main>
 
   <!-- BOTTOM NAVIGATION (MOBILE-FIRST) -->
@@ -330,6 +358,9 @@
     </button>
     <button class="nav-item" id="bnav-metrics" onclick="switchView('metrics')">
       <i class="ti ti-chart-bar"></i> Finanzas
+    </button>
+    <button class="nav-item" id="bnav-users" onclick="switchView('users')">
+      <i class="ti ti-users-group"></i> Usuarios
     </button>
   </nav>
 
@@ -805,6 +836,102 @@
         <button class="btn btn-secondary btn-block" onclick="window.print()"><i class="ti ti-printer"></i> Imprimir</button>
         <button class="btn btn-primary btn-block" id="btn-share-whatsapp" onclick="shareTicketWhatsApp()"><i class="ti ti-brand-whatsapp"></i> WhatsApp</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL: AUTENTICACIÓN / LOGIN -->
+  <div id="modal-login" class="modal-overlay" style="z-index: 10000; backdrop-filter: blur(8px); background: rgba(4, 47, 46, 0.78);">
+    <div class="modal-sheet" style="max-width: 420px; text-align: left; margin: auto;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <div style="width: 62px; height: 62px; background: linear-gradient(135deg, var(--primary-600), var(--primary-800)); color: #fff; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 32px; box-shadow: var(--shadow-mint); margin-bottom: 10px;">
+          <i class="ti ti-cake"></i>
+        </div>
+        <h3 style="font-size: 22px; font-weight: 800; color: var(--primary-950); margin-bottom: 4px;">Dulce Menta</h3>
+        <p style="font-size: 13px; color: var(--cream-700);">Ingresa tus credenciales para acceder al sistema</p>
+      </div>
+
+      <form id="form-login" onsubmit="submitLogin(event)">
+        <div class="form-group">
+          <label class="form-label">Nombre de Usuario *</label>
+          <div style="position: relative;">
+            <i class="ti ti-user" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--cream-500); font-size: 18px;"></i>
+            <input type="text" id="login-username-input" class="form-control" required placeholder="admin" style="padding-left: 38px;" autocomplete="username">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Contraseña *</label>
+          <div style="position: relative;">
+            <i class="ti ti-lock" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--cream-500); font-size: 18px;"></i>
+            <input type="password" id="login-password-input" class="form-control" required placeholder="••••••••" style="padding-left: 38px;" autocomplete="current-password">
+          </div>
+        </div>
+
+        <div style="background: var(--cream-100); border: 1px solid var(--cream-300); border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 16px; font-size: 12px; color: var(--cream-800);">
+          <i class="ti ti-key" style="color: var(--primary-600); font-size: 14px;"></i> <strong>Administrador General:</strong><br>
+          Usuario: <code style="background: #fff; padding: 2px 5px; border-radius: 4px; font-weight: 700;">admin</code> &nbsp;|&nbsp; Clave: <code style="background: #fff; padding: 2px 5px; border-radius: 4px; font-weight: 700;">None123.</code>
+        </div>
+
+        <button type="submit" id="btn-login-submit" class="btn btn-primary btn-block" style="padding: 12px; font-size: 15px; font-weight: 700;">
+          <i class="ti ti-login"></i> Iniciar Sesión
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: GESTIÓN DE USUARIO -->
+  <div id="modal-user" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-user-title"><i class="ti ti-user-plus"></i> Nuevo Usuario</div>
+        <button class="btn-close-modal" onclick="closeModal('modal-user')">&times;</button>
+      </div>
+      <form id="form-user" onsubmit="submitUser(event)">
+        <input type="hidden" id="user-edit-id">
+
+        <div class="form-group">
+          <label class="form-label">Nombre Completo *</label>
+          <input type="text" id="user-name-input" class="form-control" required placeholder="Ej: Marcela Vargas">
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label class="form-label">Usuario de Acceso *</label>
+            <input type="text" id="user-username-input" class="form-control" required placeholder="marcela.v">
+          </div>
+          <div class="form-group">
+            <label class="form-label" id="user-password-label">Contraseña *</label>
+            <input type="password" id="user-password-input" class="form-control" placeholder="••••••••">
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label class="form-label">Rol en el Sistema *</label>
+            <select id="user-role-select" class="form-control" required>
+              <option value="ADMIN">👑 Administrador General</option>
+              <option value="PASTELERO">🥐 Panadero / Pastelero</option>
+              <option value="VENTAS">🏷️ Ventas / Encargado de Pedidos</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Estado *</label>
+            <select id="user-status-select" class="form-control" required>
+              <option value="ACTIVO">✅ Activo (Puede ingresar)</option>
+              <option value="INACTIVO">⛔ Inactivo (Acceso bloqueado)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-top:14px;">
+          <button type="button" class="btn btn-secondary btn-block" onclick="closeModal('modal-user')">
+            <i class="ti ti-x"></i> Cancelar
+          </button>
+          <button type="submit" id="btn-save-user" class="btn btn-primary btn-block">
+            <i class="ti ti-check"></i> Guardar Usuario
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 

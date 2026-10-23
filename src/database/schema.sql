@@ -123,6 +123,17 @@ CREATE TABLE IF NOT EXISTS productions (
     FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    username TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'ADMIN',
+    status TEXT NOT NULL DEFAULT 'ACTIVO',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Índices para optimización de consultas
 CREATE INDEX IF NOT EXISTS idx_inventory_ingredient ON inventory_movements(ingredient_id);
 CREATE INDEX IF NOT EXISTS idx_recipes_product ON recipes(product_id);
@@ -133,3 +144,5 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
 CREATE INDEX IF NOT EXISTS idx_payments_customer ON payments(customer_id);
+CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+
