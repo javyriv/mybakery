@@ -1,4 +1,4 @@
-﻿-- Schema SQLite para Panadería & Repostería Artesanal
+-- Schema SQLite para Panadería & Repostería Artesanal
 
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS products (
     sale_price REAL NOT NULL DEFAULT 0,
     yield_quantity REAL NOT NULL DEFAULT 1,
     yield_unit TEXT NOT NULL DEFAULT 'unidad',
+    raw_weight REAL DEFAULT 0,
+    raw_weight_unit TEXT NOT NULL DEFAULT 'g',
     is_active INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP

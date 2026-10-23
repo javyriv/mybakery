@@ -1,4 +1,4 @@
-﻿const { getDb, initSchema, query, run, transaction } = require('./db');
+const { getDb, initSchema, query, run, transaction } = require('./db');
 
 function seedDatabase() {
     console.log('🥖 Inicializando y sembrando datos de prueba para Dulce Menta...');
@@ -71,8 +71,8 @@ function seedDatabase() {
         // 3. Productos y Recetas
         // Producto 1: Queque Artesanal de Zanahoria & Nuez con Frosting (1 Queque de 10 porciones)
         const p1 = run(`
-            INSERT INTO products (name, category, description, sale_price, yield_quantity, yield_unit)
-            VALUES ('Queque de Zanahoria & Nuez con Frosting', 'Queques y Tartas', 'Bizcocho especiado con canela, nueces tostadas y cobertura suave de queso crema', 16500, 1, 'queque')
+            INSERT INTO products (name, category, description, sale_price, yield_quantity, yield_unit, raw_weight, raw_weight_unit)
+            VALUES ('Queque de Zanahoria & Nuez con Frosting', 'Queques y Tartas', 'Bizcocho especiado con canela, nueces tostadas y cobertura suave de queso crema', 16500, 1, 'queque', 950, 'g')
         `);
         const p1Id = p1.lastInsertRowid;
         const p1Recipe = [
@@ -94,8 +94,8 @@ function seedDatabase() {
 
         // Producto 2: Hogaza de Pan Rústico de Masa Madre (1 Hogaza de 750g)
         const p2 = run(`
-            INSERT INTO products (name, category, description, sale_price, yield_quantity, yield_unit)
-            VALUES ('Hogaza Rústica de Masa Madre', 'Panadería Artesanal', 'Fermentación lenta de 24 horas, corteza crujiente y miga abierta alveolada', 3800, 1, 'hogaza')
+            INSERT INTO products (name, category, description, sale_price, yield_quantity, yield_unit, raw_weight, raw_weight_unit)
+            VALUES ('Hogaza Rústica de Masa Madre', 'Panadería Artesanal', 'Fermentación lenta de 24 horas, corteza crujiente y miga abierta alveolada', 3800, 1, 'hogaza', 550, 'g')
         `);
         const p2Id = p2.lastInsertRowid;
         const p2Recipe = [
@@ -110,8 +110,8 @@ function seedDatabase() {
 
         // Producto 3: Galletas Chunky Chispas de Chocolate (Docena de 12 unidades)
         const p3 = run(`
-            INSERT INTO products (name, category, description, sale_price, yield_quantity, yield_unit)
-            VALUES ('Galletas Chunky con Doble Chocolate (Docena)', 'Galletas', 'Galletas estilo Nueva York, suaves por dentro y doradas por fuera con trozos de chocolate belga', 8500, 12, 'galletas')
+            INSERT INTO products (name, category, description, sale_price, yield_quantity, yield_unit, raw_weight, raw_weight_unit)
+            VALUES ('Galletas Chunky con Doble Chocolate (Docena)', 'Galletas', 'Galletas estilo Nueva York, suaves por dentro y doradas por fuera con trozos de chocolate belga', 8500, 12, 'galletas', 75, 'g')
         `);
         const p3Id = p3.lastInsertRowid;
         const p3Recipe = [
@@ -130,8 +130,8 @@ function seedDatabase() {
 
         // Producto 4: Tarta Clásica de Frutos Rojos y Crema Pastelera
         const p4 = run(`
-            INSERT INTO products (name, category, description, sale_price, yield_quantity, yield_unit)
-            VALUES ('Tarta Sablé de Frutos Rojos', 'Queques y Tartas', 'Base crocante de mantequilla rellena de suave crema pastelera a la vainilla y cubierta de berries frescos', 14500, 1, 'tarta')
+            INSERT INTO products (name, category, description, sale_price, yield_quantity, yield_unit, raw_weight, raw_weight_unit)
+            VALUES ('Tarta Sablé de Frutos Rojos', 'Queques y Tartas', 'Base crocante de mantequilla rellena de suave crema pastelera a la vainilla y cubierta de berries frescos', 14500, 1, 'tarta', 800, 'g')
         `);
         const p4Id = p4.lastInsertRowid;
         const p4Recipe = [
@@ -150,8 +150,8 @@ function seedDatabase() {
 
         // Producto 5: Croissant de Mantequilla Francesa (Pack x 4)
         const p5 = run(`
-            INSERT INTO products (name, category, description, sale_price, yield_quantity, yield_unit)
-            VALUES ('Croissants Artesanales de Mantequilla (Pack x 4)', 'Repostería Fina', 'Hojaldrado artesanal de capas perfectas con mantequilla pura al 82%', 6000, 4, 'croissants')
+            INSERT INTO products (name, category, description, sale_price, yield_quantity, yield_unit, raw_weight, raw_weight_unit)
+            VALUES ('Croissants Artesanales de Mantequilla (Pack x 4)', 'Repostería Fina', 'Hojaldrado artesanal de capas perfectas con mantequilla pura al 82%', 6000, 4, 'croissants', 85, 'g')
         `);
         const p5Id = p5.lastInsertRowid;
         const p5Recipe = [

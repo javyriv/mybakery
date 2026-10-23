@@ -1,9 +1,10 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const { query, get, run, transaction } = require('../database/db');
 
 // Función auxiliar para calcular el costo total de los insumos de una receta
-function getProductCostAndRecipe(productId) {
+function getProductCostAndRecipe(productId, yieldQty = 1) {
+    const effectiveYield = parseFloat(yieldQty) > 0 ? parseFloat(yieldQty) : 1;
     const items = query(`
         SELECT 
             r.id as recipe_item_id,
@@ -22,8 +23,18 @@ function getProductCostAndRecipe(productId) {
         ORDER BY i.name ASC
     `, [productId]);
 
+    const enrichedItems = items.map(it => {
+        const unitQty = Math.round((it.recipe_quantity / effectiveYield) * 10000) / 10000;
+        const unitCost = Math.round((it.ingredient_total_cost / effectiveYield) * 100) / 100;
+        return {
+            ...it,
+            unit_quantity: unitQty,
+            unit_cost: unitCost
+        };
+    });
+
     const totalCost = items.reduce((sum, item) => sum + (item.ingredient_total_cost || 0), 0);
-    return { items, totalCost };
+    return { items: enrichedItems, totalCost };
 }
 
 // Listar todos los productos con costos y margen calculados
@@ -38,6 +49,8 @@ router.get('/', (req, res) => {
                 p.sale_price,
                 p.yield_quantity,
                 p.yield_unit,
+                p.raw_weight,
+                p.raw_weight_unit,
                 p.is_active,
                 p.created_at,
                 (
@@ -61,9 +74,14 @@ router.get('/', (req, res) => {
             const unitCost = p.yield_quantity > 0 ? (p.total_recipe_cost / p.yield_quantity) : p.total_recipe_cost;
             const grossProfit = p.sale_price - p.total_recipe_cost;
             const profitMarginPct = p.sale_price > 0 ? ((grossProfit / p.sale_price) * 100) : 0;
+            const rawWeight = parseFloat(p.raw_weight) || 0;
+            const totalRawWeight = Math.round(rawWeight * (p.yield_quantity || 1) * 100) / 100;
 
             return {
                 ...p,
+                raw_weight: rawWeight,
+                raw_weight_unit: p.raw_weight_unit || 'g',
+                total_raw_weight: totalRawWeight,
                 unit_cost: unitCost,
                 gross_profit: grossProfit,
                 profit_margin_pct: Math.round(profitMarginPct * 10) / 10
@@ -86,12 +104,17 @@ router.get('/:id', (req, res) => {
             return res.status(404).json({ error: 'Producto no encontrado' });
         }
 
-        const { items, totalCost } = getProductCostAndRecipe(id);
+        const { items, totalCost } = getProductCostAndRecipe(id, product.yield_quantity);
         const grossProfit = product.sale_price - totalCost;
         const profitMarginPct = product.sale_price > 0 ? ((grossProfit / product.sale_price) * 100) : 0;
+        const rawWeight = parseFloat(product.raw_weight) || 0;
+        const totalRawWeight = Math.round(rawWeight * (product.yield_quantity || 1) * 100) / 100;
 
         res.json({
             ...product,
+            raw_weight: rawWeight,
+            raw_weight_unit: product.raw_weight_unit || 'g',
+            total_raw_weight: totalRawWeight,
             recipe: items,
             total_recipe_cost: totalCost,
             unit_cost: product.yield_quantity > 0 ? (totalCost / product.yield_quantity) : totalCost,
@@ -107,7 +130,7 @@ router.get('/:id', (req, res) => {
 // Crear nuevo producto (con opción de incluir receta inicial)
 router.post('/', (req, res) => {
     try {
-        const { name, category, description, sale_price, yield_quantity, yield_unit, recipe } = req.body;
+        const { name, category, description, sale_price, yield_quantity, yield_unit, raw_weight, raw_weight_unit, recipe } = req.body;
         if (!name || !category) {
             return res.status(400).json({ error: 'Nombre y categoría son requeridos' });
         }
@@ -115,15 +138,17 @@ router.post('/', (req, res) => {
         let newProductId;
         transaction(() => {
             const result = run(`
-                INSERT INTO products (name, category, description, sale_price, yield_quantity, yield_unit)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO products (name, category, description, sale_price, yield_quantity, yield_unit, raw_weight, raw_weight_unit)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             `, [
                 name.trim(),
                 category.trim(),
                 description ? description.trim() : '',
                 parseFloat(sale_price) || 0,
                 parseFloat(yield_quantity) || 1,
-                yield_unit ? yield_unit.trim() : 'unidad'
+                yield_unit ? yield_unit.trim() : 'unidad',
+                parseFloat(raw_weight) || 0,
+                raw_weight_unit ? raw_weight_unit.trim() : 'g'
             ]);
             newProductId = result.lastInsertRowid;
 
@@ -151,7 +176,7 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
     try {
         const { id } = req.params;
-        const { name, category, description, sale_price, yield_quantity, yield_unit, is_active } = req.body;
+        const { name, category, description, sale_price, yield_quantity, yield_unit, raw_weight, raw_weight_unit, is_active } = req.body;
 
         const current = get('SELECT * FROM products WHERE id = ?', [id]);
         if (!current) {
@@ -160,7 +185,7 @@ router.put('/:id', (req, res) => {
 
         run(`
             UPDATE products
-            SET name = ?, category = ?, description = ?, sale_price = ?, yield_quantity = ?, yield_unit = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+            SET name = ?, category = ?, description = ?, sale_price = ?, yield_quantity = ?, yield_unit = ?, raw_weight = ?, raw_weight_unit = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         `, [
             name ? name.trim() : current.name,
@@ -169,6 +194,8 @@ router.put('/:id', (req, res) => {
             sale_price !== undefined ? parseFloat(sale_price) : current.sale_price,
             yield_quantity !== undefined ? parseFloat(yield_quantity) : current.yield_quantity,
             yield_unit ? yield_unit.trim() : current.yield_unit,
+            raw_weight !== undefined ? parseFloat(raw_weight) : (current.raw_weight || 0),
+            raw_weight_unit ? raw_weight_unit.trim() : (current.raw_weight_unit || 'g'),
             is_active !== undefined ? parseInt(is_active) : current.is_active,
             id
         ]);
