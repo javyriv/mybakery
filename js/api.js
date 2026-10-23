@@ -149,17 +149,34 @@ function nextId(arr) {
 
 // ─── Movimientos de inventario ────────────────────────────────────────
 async function _addMovement(ingredient_id, type, quantity, unit_cost, reference, notes) {
+  await _addMovementsBatch([{ ingredient_id, type, quantity, unit_cost, reference, notes }]);
+}
+
+async function _addMovementsBatch(newMovements) {
+  if (!newMovements || newMovements.length === 0) return;
   const movs  = await DB.getList('inventory_movements');
-  const newId = nextId(movs);
-  movs.push({ id: newId, ingredient_id, type, quantity, unit_cost, reference, notes, created_at: DB.now() });
+  let newId   = nextId(movs);
+  const now   = DB.now();
+  for (const m of newMovements) {
+    movs.push({
+      id: newId++,
+      ingredient_id: m.ingredient_id,
+      type: m.type,
+      quantity: m.quantity,
+      unit_cost: m.unit_cost,
+      reference: m.reference || '',
+      notes: m.notes || '',
+      created_at: now
+    });
+  }
   await DB.setList('inventory_movements', movs);
 }
 
-// Descuenta insumos del inventario para un pedido.
-// Recibe los arrays ya leídos para evitar lecturas duplicadas.
+// Descuenta insumos del inventario para un pedido (procesamiento en memoria y batch).
 async function _deductOrderInventory(orderId, orderNumber, orderItems, allProducts, allRecipes, ingredients) {
-  const items    = orderItems.filter(i => i.order_id == orderId);
-  const updated  = [...ingredients];
+  const items     = orderItems.filter(i => i.order_id == orderId);
+  const updated   = [...ingredients];
+  const movements = [];
 
   for (const item of items) {
     const product = allProducts.find(p => p.id == item.product_id);
@@ -174,16 +191,27 @@ async function _deductOrderInventory(orderId, orderNumber, orderItems, allProduc
       if (ingIdx < 0) continue;
       const ing = updated[ingIdx];
       updated[ingIdx] = { ...ing, current_stock: Math.round((ing.current_stock - required) * 1000) / 1000, updated_at: DB.now() };
-      await _addMovement(rItem.ingredient_id, 'SALIDA_PEDIDO', required, ing.cost_per_unit, `Pedido ${orderNumber}`, `Insumos descontados para ${item.quantity} ${product.name}`);
+      movements.push({
+        ingredient_id: rItem.ingredient_id,
+        type: 'SALIDA_PEDIDO',
+        quantity: required,
+        unit_cost: ing.cost_per_unit,
+        reference: `Pedido ${orderNumber}`,
+        notes: `Insumos descontados para ${item.quantity} ${product.name}`
+      });
     }
+  }
+  if (movements.length > 0) {
+    await _addMovementsBatch(movements);
   }
   return updated;
 }
 
-// Repone insumos al inventario cuando un pedido se cancela o elimina.
+// Repone insumos al inventario cuando un pedido se cancela o elimina (batch).
 async function _restoreOrderInventory(orderId, orderNumber, orderItems, allProducts, allRecipes, ingredients) {
-  const items   = orderItems.filter(i => i.order_id == orderId);
-  const updated = [...ingredients];
+  const items     = orderItems.filter(i => i.order_id == orderId);
+  const updated   = [...ingredients];
+  const movements = [];
 
   for (const item of items) {
     const product = allProducts.find(p => p.id == item.product_id);
@@ -198,8 +226,18 @@ async function _restoreOrderInventory(orderId, orderNumber, orderItems, allProdu
       if (ingIdx < 0) continue;
       const ing = updated[ingIdx];
       updated[ingIdx] = { ...ing, current_stock: Math.round((ing.current_stock + returned) * 1000) / 1000, updated_at: DB.now() };
-      await _addMovement(rItem.ingredient_id, 'ENTRADA', returned, ing.cost_per_unit, `Cancelación ${orderNumber}`, 'Reingreso de insumos por pedido cancelado');
+      movements.push({
+        ingredient_id: rItem.ingredient_id,
+        type: 'ENTRADA',
+        quantity: returned,
+        unit_cost: ing.cost_per_unit,
+        reference: `Cancelación ${orderNumber}`,
+        notes: 'Reingreso de insumos por pedido cancelado'
+      });
     }
+  }
+  if (movements.length > 0) {
+    await _addMovementsBatch(movements);
   }
   return updated;
 }
@@ -581,6 +619,7 @@ const API = {
     }
     let totalCost = 0;
     const updatedIngs = [...ingredients];
+    const movements   = [];
     for (const r of recipeItems) {
       const ingIdx  = updatedIngs.findIndex(i => i.id === r.ingredient_id);
       if (ingIdx < 0) continue;
@@ -589,13 +628,33 @@ const API = {
       const cost     = Math.round(required * ing.cost_per_unit * 100) / 100;
       totalCost += cost;
       updatedIngs[ingIdx] = { ...ing, current_stock: Math.round((ing.current_stock - required) * 1000) / 1000, updated_at: DB.now() };
-      await _addMovement(r.ingredient_id, 'SALIDA_PRODUCCION', required, ing.cost_per_unit, `Producción: ${qty} ${product.name}`, notes || 'Consumo automático de insumos por producción');
+      movements.push({
+        ingredient_id: r.ingredient_id,
+        type: 'SALIDA_PRODUCCION',
+        quantity: required,
+        unit_cost: ing.cost_per_unit,
+        reference: `Producción: ${qty} ${product.name}`,
+        notes: notes || 'Consumo automático de insumos por producción'
+      });
     }
-    await DB.setList('ingredients', updatedIngs);
+
     const prods  = await DB.getList('productions');
     const newId  = nextId(prods);
-    prods.push({ id: newId, product_id: Number(productId), quantity: qty, total_cost: totalCost, expected_revenue: (qty / yieldQty) * product.sale_price, notes: notes || `Elaboración de ${qty} ${product.name}`, production_date: DB.now() });
-    await DB.setList('productions', prods);
+    prods.push({
+      id: newId,
+      product_id: Number(productId),
+      quantity: qty,
+      total_cost: totalCost,
+      expected_revenue: (qty / yieldQty) * product.sale_price,
+      notes: notes || `Elaboración de ${qty} ${product.name}`,
+      production_date: DB.now()
+    });
+
+    await Promise.all([
+      DB.setList('ingredients', updatedIngs),
+      DB.setList('productions', prods),
+      movements.length > 0 ? _addMovementsBatch(movements) : Promise.resolve()
+    ]);
     return { message: '¡Producción ejecutada con éxito! Insumos descontados del inventario.', production_id: newId, product_name: product.name, quantity_produced: qty, total_cost_consumed: totalCost };
   },
 
@@ -685,7 +744,16 @@ const API = {
     const { customer_id, delivery_date, delivery_time, delivery_type, delivery_address, notes, items, initial_payment, deduct_inventory_now } = data;
     if (!customer_id || !delivery_date || !items || items.length === 0) throw new Error('Cliente, fecha de entrega y al menos un producto son obligatorios');
 
-    const [allOrders, allProducts, allRecipes, allIngredients] = await Promise.all([DB.getList('orders'), DB.getList('products'), DB.getList('recipes'), DB.getList('ingredients')]);
+    // 1. Cargar todas las colecciones necesarias en un solo Promise.all en paralelo
+    const [allOrders, allProducts, allRecipes, allIngredients, allItems, allPayments] = await Promise.all([
+      DB.getList('orders'),
+      DB.getList('products'),
+      DB.getList('recipes'),
+      DB.getList('ingredients'),
+      DB.getList('order_items'),
+      DB.getList('payments')
+    ]);
+
     const year       = new Date().getFullYear();
     const nextNum    = (allOrders.length + 1).toString().padStart(4, '0');
     const orderNum   = `PED-${year}-${nextNum}`;
@@ -710,29 +778,59 @@ const API = {
     if (initAmt >= totalAmount) payStatus = 'PAGADO';
     else if (initAmt > 0)      payStatus = 'ABONO_PARCIAL';
 
-    const newOrder = { id: newOrderId, order_number: orderNum, customer_id, delivery_date, delivery_time: delivery_time || '12:00', delivery_type: delivery_type || 'RETIRO', delivery_address: delivery_address || '', status: 'PENDIENTE', payment_status: payStatus, total_amount: Math.round(totalAmount * 100) / 100, total_cost: Math.round(totalCost * 100) / 100, total_paid: initAmt, inventory_deducted: 0, notes: notes || '', created_at: DB.now(), updated_at: DB.now() };
+    const newOrder = {
+      id: newOrderId,
+      order_number: orderNum,
+      customer_id,
+      delivery_date,
+      delivery_time: delivery_time || '12:00',
+      delivery_type: delivery_type || 'RETIRO',
+      delivery_address: delivery_address || '',
+      status: 'PENDIENTE',
+      payment_status: payStatus,
+      total_amount: Math.round(totalAmount * 100) / 100,
+      total_cost: Math.round(totalCost * 100) / 100,
+      total_paid: initAmt,
+      inventory_deducted: deduct_inventory_now ? 1 : 0,
+      notes: notes || '',
+      created_at: DB.now(),
+      updated_at: DB.now()
+    };
     allOrders.push(newOrder);
-    await DB.setList('orders', allOrders);
 
-    const allItems = await DB.getList('order_items');
     let nextItemId = nextId(allItems);
-    for (const item of processed) allItems.push({ id: nextItemId++, order_id: newOrderId, ...item });
-    await DB.setList('order_items', allItems);
+    const orderItemsSaved = [];
+    for (const item of processed) {
+      const saved = { id: nextItemId++, order_id: newOrderId, ...item };
+      allItems.push(saved);
+      orderItemsSaved.push(saved);
+    }
+
+    const writes = [
+      DB.setList('orders', allOrders),
+      DB.setList('order_items', allItems)
+    ];
 
     if (initAmt > 0 && initial_payment) {
-      const pays = await DB.getList('payments');
-      pays.push({ id: nextId(pays), order_id: newOrderId, customer_id, amount: initAmt, payment_method: initial_payment.payment_method || 'EFECTIVO', reference: initial_payment.reference || '', notes: 'Abono inicial', payment_date: DB.now() });
-      await DB.setList('payments', pays);
+      allPayments.push({
+        id: nextId(allPayments),
+        order_id: newOrderId,
+        customer_id,
+        amount: initAmt,
+        payment_method: initial_payment.payment_method || 'EFECTIVO',
+        reference: initial_payment.reference || '',
+        notes: 'Abono inicial',
+        payment_date: DB.now()
+      });
+      writes.push(DB.setList('payments', allPayments));
     }
 
     if (deduct_inventory_now) {
-      const freshItems = await DB.getList('order_items');
-      const updIngs    = await _deductOrderInventory(newOrderId, orderNum, freshItems, allProducts, allRecipes, allIngredients);
-      await DB.setList('ingredients', updIngs);
-      const freshOrders = await DB.getList('orders');
-      const oIdx = freshOrders.findIndex(x => x.id == newOrderId);
-      if (oIdx >= 0) { freshOrders[oIdx].inventory_deducted = 1; await DB.setList('orders', freshOrders); }
+      const updIngs = await _deductOrderInventory(newOrderId, orderNum, orderItemsSaved, allProducts, allRecipes, allIngredients);
+      writes.push(DB.setList('ingredients', updIngs));
     }
+
+    await Promise.all(writes);
     return newOrder;
   },
 
