@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const { query, get } = require('../database/db');
 
@@ -102,6 +102,31 @@ router.get('/', (req, res) => {
             FROM ingredients
         `);
 
+        // Resumen detallado del estado de pedidos por producto (Entregados vs. Pendientes)
+        const productsOrderStatus = query(`
+            SELECT 
+                p.id,
+                p.name,
+                p.category,
+                COALESCE(p.yield_unit, 'unidad') as yield_unit,
+                COUNT(DISTINCT o.id) as orders_count,
+                COALESCE(SUM(oi.quantity), 0) as total_units,
+                COALESCE(SUM(CASE WHEN o.status = 'ENTREGADO' THEN oi.quantity ELSE 0 END), 0) as delivered_units,
+                COALESCE(SUM(CASE WHEN o.status IN ('PENDIENTE', 'EN_PREPARACION', 'LISTO') THEN oi.quantity ELSE 0 END), 0) as pending_units,
+                COALESCE(SUM(CASE WHEN o.status = 'PENDIENTE' THEN oi.quantity ELSE 0 END), 0) as status_pending,
+                COALESCE(SUM(CASE WHEN o.status = 'EN_PREPARACION' THEN oi.quantity ELSE 0 END), 0) as status_baking,
+                COALESCE(SUM(CASE WHEN o.status = 'LISTO' THEN oi.quantity ELSE 0 END), 0) as status_ready,
+                COALESCE(SUM(oi.subtotal), 0) as total_revenue,
+                COALESCE(SUM(CASE WHEN o.status = 'ENTREGADO' THEN oi.subtotal ELSE 0 END), 0) as delivered_revenue,
+                COALESCE(SUM(CASE WHEN o.status IN ('PENDIENTE', 'EN_PREPARACION', 'LISTO') THEN oi.subtotal ELSE 0 END), 0) as pending_revenue
+            FROM order_items oi
+            JOIN orders o ON oi.order_id = o.id
+            JOIN products p ON oi.product_id = p.id
+            ${dateFilterOrders}
+            GROUP BY p.id
+            ORDER BY pending_units DESC, total_units DESC
+        `);
+
         res.json({
             period: period || 'month',
             summary: {
@@ -117,6 +142,7 @@ router.get('/', (req, res) => {
             inventory: inventorySummary,
             status_breakdown: statusBreakdown,
             top_products: topProducts,
+            products_order_status: productsOrderStatus,
             daily_chart: dailyChart
         });
     } catch (err) {
