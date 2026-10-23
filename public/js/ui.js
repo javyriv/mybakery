@@ -1,4 +1,4 @@
-﻿// Utilidades de Interfaz de Usuario y Formateo
+// Utilidades de Interfaz de Usuario y Formateo
 const UI = {
   currencySymbol: '₡',
 
@@ -85,6 +85,10 @@ const UI = {
     }
   }
 };
+
+// Exportar globalmente para eventos onclick en HTML
+window.openModal = function(modalId) { UI.openModal(modalId); };
+window.closeModal = function(modalId) { UI.closeModal(modalId); };
 
 // Cerrar modales haciendo click fuera del sheet
 document.addEventListener('click', (e) => {

@@ -245,6 +245,9 @@ function renderProductsList() {
         <button class="btn btn-secondary btn-sm" onclick="quickSelectProductForProjection(${p.id})">
           <i class="ti ti-calculator"></i> Proyectar
         </button>
+        <button class="btn btn-secondary btn-sm" title="Editar Producto y Receta" onclick="openEditProductModal(${p.id})">
+          <i class="ti ti-edit"></i> Editar
+        </button>
         ${p.ingredients_count > 0 ? `
         <button class="btn btn-secondary btn-sm" title="Vaciar ingredientes de la receta" onclick="confirmDeleteRecipe(${p.id}, '${escapeQuotes(p.name)}')">
           <i class="ti ti-tools-kitchen-2-off"></i> Vaciar Receta
@@ -261,6 +264,41 @@ function quickSelectProductForProjection(productId) {
   document.getElementById('proj-product-select').value = productId;
   runProductionProjection();
   window.scrollTo({ top: 100, behavior: 'smooth' });
+}
+
+// Abrir modal para Editar Producto y Receta
+async function openEditProductModal(productId) {
+  try {
+    const product = await API.getProduct(productId);
+    document.getElementById('form-new-product').reset();
+    document.getElementById('prod-edit-id').value = product.id;
+    document.getElementById('modal-product-title').innerHTML = '<i class="ti ti-edit"></i> Editar Producto & Receta';
+    document.getElementById('btn-save-product').innerHTML = '<i class="ti ti-check"></i> Actualizar Producto y Receta';
+
+    document.getElementById('prod-name-input').value = product.name;
+    document.getElementById('prod-category-select').value = product.category;
+    document.getElementById('prod-price-input').value = product.sale_price;
+    document.getElementById('prod-yield-qty-input').value = product.yield_quantity || 1;
+    document.getElementById('prod-yield-unit-input').value = product.yield_unit || 'unidad';
+    document.getElementById('prod-desc-input').value = product.description || '';
+
+    // Llenar ingredientes de la receta existente
+    AppState.recipeItemsBuilder = [];
+    const container = document.getElementById('recipe-items-builder');
+    container.innerHTML = '';
+
+    if (Array.isArray(product.recipe) && product.recipe.length > 0) {
+      product.recipe.forEach(it => {
+        addRecipeItemRow(it.ingredient_id, it.recipe_quantity);
+      });
+    } else {
+      addRecipeItemRow();
+    }
+
+    UI.openModal('modal-new-product');
+  } catch (err) {
+    UI.showToast(err.message, 'error');
+  }
 }
 
 // Eliminar receta de un producto
@@ -379,6 +417,9 @@ function renderInventoryList() {
           <button class="btn btn-secondary btn-sm" onclick="openStockAdjustmentModal(${item.id})">
             <i class="ti ti-plus"></i> Ingresar / Ajustar
           </button>
+          <button class="btn btn-secondary btn-sm" title="Editar Insumo" onclick="openEditIngredientModal(${item.id})">
+            <i class="ti ti-edit"></i> Editar
+          </button>
           <button class="btn btn-danger btn-sm btn-icon" title="Eliminar Insumo" onclick="confirmDeleteIngredient(${item.id}, '${escapeQuotes(item.name)}')">
             <i class="ti ti-trash"></i>
           </button>
@@ -386,6 +427,26 @@ function renderInventoryList() {
       </div>
     `;
   }).join('');
+}
+
+// Abrir modal para Editar Insumo
+function openEditIngredientModal(ingredientId) {
+  const item = AppState.ingredients.find(i => i.id === ingredientId);
+  if (!item) return;
+
+  document.getElementById('form-new-ingredient').reset();
+  document.getElementById('ing-edit-id').value = item.id;
+  document.getElementById('modal-ingredient-title').innerHTML = '<i class="ti ti-edit"></i> Editar Insumo';
+  document.getElementById('btn-save-ingredient').innerHTML = '<i class="ti ti-check"></i> Actualizar Insumo';
+
+  document.getElementById('ing-name-input').value = item.name;
+  document.getElementById('ing-category-select').value = item.category;
+  document.getElementById('ing-unit-select').value = item.unit;
+  document.getElementById('ing-cost-input').value = item.cost_per_unit;
+  document.getElementById('ing-stock-input').value = item.current_stock;
+  document.getElementById('ing-min-input').value = item.min_stock;
+
+  UI.openModal('modal-new-ingredient');
 }
 
 // Eliminar insumo del inventario
@@ -493,6 +554,9 @@ function renderOrderCardHtml(order, isDashboard = false) {
         <button class="btn btn-secondary btn-sm btn-icon" title="Ver Recibo" onclick="openTicketModal(${order.id})">
           <i class="ti ti-receipt"></i>
         </button>
+        <button class="btn btn-secondary btn-sm btn-icon" title="Editar Pedido" onclick="openEditOrderModal(${order.id})">
+          <i class="ti ti-edit"></i>
+        </button>
         ${payBtn}
         ${nextStatusBtn}
         <button class="btn btn-danger btn-sm btn-icon" title="Eliminar Pedido" onclick="confirmDeleteOrder(${order.id}, '${order.order_number}')">
@@ -501,6 +565,57 @@ function renderOrderCardHtml(order, isDashboard = false) {
       </div>
     </div>
   `;
+}
+
+// Abrir modal de Edición de Pedido
+function openEditOrderModal(orderId) {
+  const order = AppState.orders.find(o => o.id === orderId);
+  if (!order) return;
+
+  document.getElementById('edit-order-id').value = order.id;
+  document.getElementById('edit-order-header-info').textContent = `Pedido: #${order.order_number}`;
+  document.getElementById('edit-order-customer-info').textContent = `Cliente: ${order.customer_name}`;
+  document.getElementById('edit-order-delivery-date').value = order.delivery_date;
+  document.getElementById('edit-order-delivery-time').value = order.delivery_time || '14:00';
+  document.getElementById('edit-order-delivery-type').value = order.delivery_type || 'RETIRO';
+  document.getElementById('edit-order-delivery-address').value = order.delivery_address || '';
+  document.getElementById('edit-order-notes').value = order.notes || '';
+
+  toggleEditOrderAddressField();
+  UI.openModal('modal-edit-order');
+}
+
+function toggleEditOrderAddressField() {
+  const type = document.getElementById('edit-order-delivery-type').value;
+  document.getElementById('edit-order-address-group').style.display = type === 'DOMICILIO' ? 'block' : 'none';
+}
+
+async function submitEditOrder(e) {
+  e.preventDefault();
+  const orderId = document.getElementById('edit-order-id').value;
+  const deliveryDate = document.getElementById('edit-order-delivery-date').value;
+  const deliveryTime = document.getElementById('edit-order-delivery-time').value;
+  const deliveryType = document.getElementById('edit-order-delivery-type').value;
+  const deliveryAddress = document.getElementById('edit-order-delivery-address').value;
+  const notes = document.getElementById('edit-order-notes').value;
+
+  try {
+    await API.updateOrder(orderId, {
+      delivery_date: deliveryDate,
+      delivery_time: deliveryTime,
+      delivery_type: deliveryType,
+      delivery_address: deliveryAddress,
+      notes: notes
+    });
+
+    UI.showToast('Pedido actualizado con éxito', 'success');
+    UI.closeModal('modal-edit-order');
+
+    if (AppState.currentView === 'dashboard') loadDashboard();
+    else if (AppState.currentView === 'orders') loadOrders();
+  } catch (err) {
+    UI.showToast(err.message, 'error');
+  }
 }
 
 async function advanceOrderStatus(orderId, newStatus) {
@@ -576,6 +691,9 @@ function renderCustomersList() {
           <button class="btn btn-primary btn-sm" onclick="openNewOrderWithCustomer(${c.id})">
             <i class="ti ti-plus"></i> Pedido
           </button>
+          <button class="btn btn-secondary btn-sm" title="Editar Cliente" onclick="openEditCustomerModal(${c.id})">
+            <i class="ti ti-edit"></i> Editar
+          </button>
           <button class="btn btn-danger btn-sm btn-icon" title="Eliminar Cliente" onclick="confirmDeleteCustomer(${c.id}, '${escapeQuotes(c.name)}')">
             <i class="ti ti-trash"></i>
           </button>
@@ -583,6 +701,25 @@ function renderCustomersList() {
       </div>
     `;
   }).join('');
+}
+
+// Abrir modal de Edición de Cliente
+function openEditCustomerModal(customerId) {
+  const customer = AppState.customers.find(c => c.id === customerId);
+  if (!customer) return;
+
+  document.getElementById('form-new-customer').reset();
+  document.getElementById('cust-edit-id').value = customer.id;
+  document.getElementById('modal-customer-title').innerHTML = '<i class="ti ti-edit"></i> Editar Cliente';
+  document.getElementById('btn-save-customer').innerHTML = '<i class="ti ti-check"></i> Actualizar Cliente';
+
+  document.getElementById('cust-name-input').value = customer.name;
+  document.getElementById('cust-phone-input').value = customer.phone || '';
+  document.getElementById('cust-email-input').value = customer.email || '';
+  document.getElementById('cust-address-input').value = customer.address || '';
+  document.getElementById('cust-notes-input').value = customer.notes || '';
+
+  UI.openModal('modal-new-customer');
 }
 
 // Eliminar cliente
@@ -943,14 +1080,18 @@ async function submitStockAdjustment(e) {
   }
 }
 
-// --- Modal de Nuevo Insumo ---
+// --- Modal de Nuevo/Editar Insumo ---
 function openNewIngredientModal() {
   document.getElementById('form-new-ingredient').reset();
+  document.getElementById('ing-edit-id').value = '';
+  document.getElementById('modal-ingredient-title').innerHTML = '<i class="ti ti-sparkles"></i> Nuevo Insumo de Materia Prima';
+  document.getElementById('btn-save-ingredient').innerHTML = '<i class="ti ti-check"></i> Guardar Insumo';
   UI.openModal('modal-new-ingredient');
 }
 
 async function submitNewIngredient(e) {
   e.preventDefault();
+  const editId = document.getElementById('ing-edit-id').value;
   const name = document.getElementById('ing-name-input').value;
   const category = document.getElementById('ing-category-select').value;
   const unit = document.getElementById('ing-unit-select').value;
@@ -959,29 +1100,48 @@ async function submitNewIngredient(e) {
   const min = parseFloat(document.getElementById('ing-min-input').value) || 0;
 
   try {
-    await API.createIngredient({
-      name, category, unit, cost_per_unit: cost, current_stock: stock, min_stock: min
-    });
+    if (editId) {
+      await API.updateIngredient(editId, {
+        name, category, unit, cost_per_unit: cost, min_stock: min
+      });
+      // Ajustar stock si fue modificado en la edición
+      await API.adjustStock(editId, {
+        type: 'AJUSTE_EXACTO',
+        quantity: stock,
+        unit_cost: cost,
+        reference: 'Actualización en edición de insumo'
+      });
+      UI.showToast('Insumo actualizado con éxito', 'success');
+    } else {
+      await API.createIngredient({
+        name, category, unit, cost_per_unit: cost, current_stock: stock, min_stock: min
+      });
+      UI.showToast('Insumo registrado con éxito', 'success');
+    }
 
-    UI.showToast('Insumo registrado con éxito', 'success');
     UI.closeModal('modal-new-ingredient');
     await refreshInventoryState();
     renderInventoryList();
+    if (AppState.currentView === 'dashboard') loadDashboard();
   } catch (err) {
     UI.showToast(err.message, 'error');
   }
 }
 
-// --- Modal de Nuevo Producto & Receta ---
+// --- Modal de Nuevo/Editar Producto & Receta ---
 function openNewProductModal() {
   document.getElementById('form-new-product').reset();
+  document.getElementById('prod-edit-id').value = '';
+  document.getElementById('modal-product-title').innerHTML = '<i class="ti ti-cake"></i> Nuevo Producto & Receta';
+  document.getElementById('btn-save-product').innerHTML = '<i class="ti ti-check"></i> Registrar Producto y Receta';
+
   AppState.recipeItemsBuilder = [];
   document.getElementById('recipe-items-builder').innerHTML = '';
   addRecipeItemRow();
   UI.openModal('modal-new-product');
 }
 
-function addRecipeItemRow() {
+function addRecipeItemRow(preselectedIngredientId = null, preselectedQty = 0.1) {
   const container = document.getElementById('recipe-items-builder');
   const index = AppState.recipeItemsBuilder.length;
 
@@ -991,12 +1151,12 @@ function addRecipeItemRow() {
   row.style.cssText = 'display:grid; grid-template-columns: 1fr 90px 36px; gap:8px; align-items:center;';
 
   const options = AppState.ingredients.map(i => 
-    `<option value="${i.id}">${i.name} (${i.unit})`
+    `<option value="${i.id}" ${preselectedIngredientId && preselectedIngredientId == i.id ? 'selected' : ''}>${i.name} (${i.unit})`
   ).join('');
 
   row.innerHTML = `
     <select class="form-control" style="min-height:40px; font-size:13px;">${options}</select>
-    <input type="number" class="form-control" style="min-height:40px; font-size:13px;" placeholder="Cant." step="any" value="0.1">
+    <input type="number" class="form-control" style="min-height:40px; font-size:13px;" placeholder="Cant." step="any" value="${preselectedQty}">
     <button type="button" class="btn btn-danger btn-sm" style="min-height:40px; width:36px; padding:0;" onclick="document.getElementById('recipe-row-${index}').remove()">&times;</button>
   `;
 
@@ -1006,6 +1166,7 @@ function addRecipeItemRow() {
 
 async function submitNewProduct(e) {
   e.preventDefault();
+  const editId = document.getElementById('prod-edit-id').value;
   const name = document.getElementById('prod-name-input').value;
   const category = document.getElementById('prod-category-select').value;
   const price = parseFloat(document.getElementById('prod-price-input').value) || 0;
@@ -1026,11 +1187,19 @@ async function submitNewProduct(e) {
   });
 
   try {
-    await API.createProduct({
-      name, category, sale_price: price, yield_quantity: yieldQty, yield_unit: yieldUnit, description: desc, recipe
-    });
+    if (editId) {
+      await API.updateProduct(editId, {
+        name, category, sale_price: price, yield_quantity: yieldQty, yield_unit: yieldUnit, description: desc
+      });
+      await API.saveRecipe(editId, recipe);
+      UI.showToast('Producto y receta actualizados con éxito', 'success');
+    } else {
+      await API.createProduct({
+        name, category, sale_price: price, yield_quantity: yieldQty, yield_unit: yieldUnit, description: desc, recipe
+      });
+      UI.showToast('Producto y receta guardados con éxito', 'success');
+    }
 
-    UI.showToast('Producto y receta guardados con éxito', 'success');
     UI.closeModal('modal-new-product');
     await refreshProductsState();
     loadProductionView();
@@ -1039,15 +1208,19 @@ async function submitNewProduct(e) {
   }
 }
 
-// --- Modal de Nuevo Cliente ---
+// --- Modal de Nuevo/Editar Cliente ---
 function openNewCustomerModal(selectForOrder = false) {
   document.getElementById('form-new-customer').reset();
+  document.getElementById('cust-edit-id').value = '';
+  document.getElementById('modal-customer-title').innerHTML = '<i class="ti ti-user-plus"></i> Registrar Cliente';
+  document.getElementById('btn-save-customer').innerHTML = '<i class="ti ti-check"></i> Guardar Cliente';
   document.getElementById('form-new-customer').dataset.selectForOrder = selectForOrder ? 'true' : 'false';
   UI.openModal('modal-new-customer');
 }
 
 async function submitNewCustomer(e) {
   e.preventDefault();
+  const editId = document.getElementById('cust-edit-id').value;
   const name = document.getElementById('cust-name-input').value;
   const phone = document.getElementById('cust-phone-input').value;
   const email = document.getElementById('cust-email-input').value;
@@ -1056,16 +1229,22 @@ async function submitNewCustomer(e) {
   const selectForOrder = document.getElementById('form-new-customer').dataset.selectForOrder === 'true';
 
   try {
-    const created = await API.createCustomer({ name, phone, email, address, notes });
-    UI.showToast('Cliente registrado con éxito', 'success');
+    if (editId) {
+      await API.updateCustomer(editId, { name, phone, email, address, notes });
+      UI.showToast('Cliente actualizado con éxito', 'success');
+    } else {
+      const created = await API.createCustomer({ name, phone, email, address, notes });
+      UI.showToast('Cliente registrado con éxito', 'success');
+
+      if (selectForOrder) {
+        const custSelect = document.getElementById('order-customer-select');
+        custSelect.innerHTML += `<option value="${created.id}" selected>${created.name} (${created.phone || 'Sin tel'})`;
+        custSelect.value = created.id;
+      }
+    }
+
     UI.closeModal('modal-new-customer');
     await refreshCustomersState();
-
-    if (selectForOrder) {
-      const custSelect = document.getElementById('order-customer-select');
-      custSelect.innerHTML += `<option value="${created.id}" selected>${created.name} (${created.phone || 'Sin tel'})`;
-      custSelect.value = created.id;
-    }
 
     if (AppState.currentView === 'customers') renderCustomersList();
   } catch (err) {

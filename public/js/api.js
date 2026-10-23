@@ -67,6 +67,7 @@ const API = {
   },
   getOrder: (id) => API.request(`/orders/${id}`),
   createOrder: (data) => API.request('/orders', { method: 'POST', body: JSON.stringify(data) }),
+  updateOrder: (id, data) => API.request(`/orders/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   updateOrderStatus: (id, status) => API.request(`/orders/${id}/status`, {
     method: 'PATCH',
     body: JSON.stringify({ status })

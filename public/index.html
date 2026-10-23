@@ -517,10 +517,11 @@
   <div id="modal-new-ingredient" class="modal-overlay">
     <div class="modal-sheet">
       <div class="modal-header">
-        <div class="modal-title"><i class="ti ti-sparkles"></i> Nuevo Insumo de Materia Prima</div>
+        <div class="modal-title" id="modal-ingredient-title"><i class="ti ti-sparkles"></i> Nuevo Insumo de Materia Prima</div>
         <button class="btn-close-modal" onclick="closeModal('modal-new-ingredient')">&times;</button>
       </div>
       <form id="form-new-ingredient" onsubmit="submitNewIngredient(event)">
+        <input type="hidden" id="ing-edit-id">
         <div class="form-group">
           <label class="form-label">Nombre del Insumo *</label>
           <input type="text" id="ing-name-input" class="form-control" required placeholder="Ej: Canela en Polvo">
@@ -566,7 +567,7 @@
           </div>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block">
+        <button type="submit" id="btn-save-ingredient" class="btn btn-primary btn-block">
           <i class="ti ti-check"></i> Guardar Insumo
         </button>
       </form>
@@ -577,10 +578,11 @@
   <div id="modal-new-product" class="modal-overlay">
     <div class="modal-sheet">
       <div class="modal-header">
-        <div class="modal-title"><i class="ti ti-cake"></i> Nuevo Producto & Receta</div>
+        <div class="modal-title" id="modal-product-title"><i class="ti ti-cake"></i> Nuevo Producto & Receta</div>
         <button class="btn-close-modal" onclick="closeModal('modal-new-product')">&times;</button>
       </div>
       <form id="form-new-product" onsubmit="submitNewProduct(event)">
+        <input type="hidden" id="prod-edit-id">
         <div class="form-group">
           <label class="form-label">Nombre del Producto Final *</label>
           <input type="text" id="prod-name-input" class="form-control" required placeholder="Ej: Queque Personal de Chocolate">
@@ -629,7 +631,7 @@
           </button>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block">
+        <button type="submit" id="btn-save-product" class="btn btn-primary btn-block">
           <i class="ti ti-check"></i> Registrar Producto y Receta
         </button>
       </form>
@@ -640,10 +642,11 @@
   <div id="modal-new-customer" class="modal-overlay">
     <div class="modal-sheet">
       <div class="modal-header">
-        <div class="modal-title"><i class="ti ti-user-plus"></i> Registrar Cliente</div>
+        <div class="modal-title" id="modal-customer-title"><i class="ti ti-user-plus"></i> Registrar Cliente</div>
         <button class="btn-close-modal" onclick="closeModal('modal-new-customer')">&times;</button>
       </div>
       <form id="form-new-customer" onsubmit="submitNewCustomer(event)">
+        <input type="hidden" id="cust-edit-id">
         <div class="form-group">
           <label class="form-label">Nombre Completo *</label>
           <input type="text" id="cust-name-input" class="form-control" required placeholder="Ej: Patricia Montero">
@@ -666,7 +669,7 @@
           <label class="form-label">Notas Especiales / Alergias</label>
           <input type="text" id="cust-notes-input" class="form-control" placeholder="Ej: Alérgica al gluten...">
         </div>
-        <button type="submit" class="btn btn-primary btn-block">
+        <button type="submit" id="btn-save-customer" class="btn btn-primary btn-block">
           <i class="ti ti-check"></i> Guardar Cliente
         </button>
       </form>

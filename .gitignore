@@ -1,4 +1,4 @@
-﻿# Dependencias
+# Dependencias
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -36,3 +36,6 @@ temp/
 scratch/
 uploads/*
 !uploads/.gitkeep
+
+# Repositorio estático para GitHub Pages (rama gh-pages)
+github-pages/
