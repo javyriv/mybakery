@@ -81,6 +81,8 @@ async function loadDashboard() {
       API.getOrders({ period: 'today' })
     ]);
 
+    AppState.orders = todayOrders;
+
     // Resumen en header y badge
     const alertCountBadge = document.getElementById('header-alert-count');
     if (alerts.length > 0) {
@@ -529,15 +531,15 @@ function renderOrdersList() {
 function renderOrderCardHtml(order, isDashboard = false) {
   let nextStatusBtn = '';
   if (order.status === 'PENDIENTE') {
-    nextStatusBtn = `<button class="btn btn-accent btn-sm" onclick="advanceOrderStatus(${order.id}, 'EN_PREPARACION')"><i class="ti ti-flame"></i> Hornear</button>`;
+    nextStatusBtn = `<button class="btn btn-accent btn-sm" onclick="advanceOrderStatus('${order.id}', 'EN_PREPARACION')"><i class="ti ti-flame"></i> Hornear</button>`;
   } else if (order.status === 'EN_PREPARACION') {
-    nextStatusBtn = `<button class="btn btn-accent btn-sm" onclick="advanceOrderStatus(${order.id}, 'LISTO')"><i class="ti ti-package"></i> Listo</button>`;
+    nextStatusBtn = `<button class="btn btn-accent btn-sm" onclick="advanceOrderStatus('${order.id}', 'LISTO')"><i class="ti ti-package"></i> Listo</button>`;
   } else if (order.status === 'LISTO') {
-    nextStatusBtn = `<button class="btn btn-primary btn-sm" onclick="advanceOrderStatus(${order.id}, 'ENTREGADO')"><i class="ti ti-check"></i> Entregar</button>`;
+    nextStatusBtn = `<button class="btn btn-primary btn-sm" onclick="advanceOrderStatus('${order.id}', 'ENTREGADO')"><i class="ti ti-check"></i> Entregar</button>`;
   }
 
   const payBtn = order.pending_balance > 0 
-    ? `<button class="btn btn-secondary btn-sm" onclick="openPaymentModal(${order.id})"><i class="ti ti-cash"></i> Abonar</button>`
+    ? `<button class="btn btn-secondary btn-sm" onclick="openPaymentModal('${order.id}')"><i class="ti ti-cash"></i> Abonar</button>`
     : '';
 
   return `
@@ -561,15 +563,15 @@ function renderOrderCardHtml(order, isDashboard = false) {
       </div>
       ${order.notes ? `<div style="font-size:12px; color:var(--cream-700); font-style:italic;">📝 ${order.notes}</div>` : ''}
       <div class="item-card-actions">
-        <button class="btn btn-secondary btn-sm btn-icon" title="Ver Recibo" onclick="openTicketModal(${order.id})">
+        <button class="btn btn-secondary btn-sm btn-icon" title="Ver Recibo" onclick="openTicketModal('${order.id}')">
           <i class="ti ti-receipt"></i>
         </button>
-        <button class="btn btn-secondary btn-sm btn-icon" title="Editar Pedido" onclick="openEditOrderModal(${order.id})">
+        <button class="btn btn-secondary btn-sm btn-icon" title="Editar Pedido" onclick="openEditOrderModal('${order.id}')">
           <i class="ti ti-edit"></i>
         </button>
         ${payBtn}
         ${nextStatusBtn}
-        <button class="btn btn-danger btn-sm btn-icon" title="Eliminar Pedido" onclick="confirmDeleteOrder(${order.id}, '${order.order_number}')">
+        <button class="btn btn-danger btn-sm btn-icon" title="Eliminar Pedido" onclick="confirmDeleteOrder('${order.id}', '${order.order_number}')">
           <i class="ti ti-trash"></i>
         </button>
       </div>
@@ -578,8 +580,16 @@ function renderOrderCardHtml(order, isDashboard = false) {
 }
 
 // Abrir modal de Edición de Pedido
-function openEditOrderModal(orderId) {
-  const order = AppState.orders.find(o => o.id === orderId);
+async function openEditOrderModal(orderId) {
+  let order = AppState.orders.find(o => String(o.id) === String(orderId));
+  if (!order) {
+    try {
+      order = await API.getOrder(orderId);
+    } catch (e) {
+      console.error('Error al obtener pedido para edición:', e);
+      return;
+    }
+  }
   if (!order) return;
 
   document.getElementById('edit-order-id').value = order.id;
@@ -998,8 +1008,16 @@ async function submitNewOrder(e) {
 }
 
 // --- Modal de Pagos / Abonos ---
-function openPaymentModal(orderId) {
-  const order = AppState.orders.find(o => o.id === orderId);
+async function openPaymentModal(orderId) {
+  let order = AppState.orders.find(o => String(o.id) === String(orderId));
+  if (!order) {
+    try {
+      order = await API.getOrder(orderId);
+    } catch (e) {
+      console.error('Error al obtener pedido para abono:', e);
+      return;
+    }
+  }
   if (!order) return;
 
   document.getElementById('pay-order-id').value = order.id;

@@ -468,6 +468,56 @@
     </div>
   </div>
 
+  <!-- MODAL: EDITAR PEDIDO -->
+  <div id="modal-edit-order" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <div class="modal-title"><i class="ti ti-edit"></i> Editar Pedido</div>
+        <button class="btn-close-modal" onclick="closeModal('modal-edit-order')">&times;</button>
+      </div>
+      <form id="form-edit-order" onsubmit="submitEditOrder(event)">
+        <input type="hidden" id="edit-order-id">
+        <div style="background:var(--cream-100); border-radius:var(--radius-md); padding:12px; margin-bottom:14px;">
+          <div style="font-weight:700; font-size:14px; color:var(--primary-900);" id="edit-order-header-info">Pedido: #PED-2026-0001</div>
+          <div style="font-size:13px; color:var(--cream-700); margin-top:2px;" id="edit-order-customer-info">Cliente: Nombre</div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label class="form-label">Fecha de Entrega *</label>
+            <input type="date" id="edit-order-delivery-date" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Hora de Entrega *</label>
+            <input type="time" id="edit-order-delivery-time" class="form-control" required>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Tipo de Entrega *</label>
+          <select id="edit-order-delivery-type" class="form-control" required onchange="toggleEditOrderAddressField()">
+            <option value="RETIRO">🏠 Retiro en Local</option>
+            <option value="DOMICILIO">🛵 Entrega a Domicilio</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="edit-order-address-group" style="display:none;">
+          <label class="form-label">Dirección de Entrega</label>
+          <input type="text" id="edit-order-delivery-address" class="form-control" placeholder="Dirección completa...">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Notas Especiales / Dedicatoria</label>
+          <input type="text" id="edit-order-notes" class="form-control" placeholder="Dedicatoria o empaque...">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="ti ti-check"></i> Guardar Cambios
+        </button>
+      </form>
+    </div>
+  </div>
+
   <!-- MODAL 3: AJUSTE DE STOCK -->
   <div id="modal-adjust-stock" class="modal-overlay">
     <div class="modal-sheet">
