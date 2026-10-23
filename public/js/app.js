@@ -1091,16 +1091,30 @@ async function submitNewOrder(e) {
     deduct_inventory_now: deductNow
   };
 
-  try {
-    const created = await API.createOrder(payload);
-    UI.showToast(`¡Pedido #${created.order_number} registrado con éxito!`, 'success');
-    UI.closeModal('modal-order');
+  const submitBtn = e.target ? e.target.querySelector('button[type="submit"]') : null;
 
-    await Promise.all([refreshInventoryState(), refreshCustomersState()]);
-    if (AppState.currentView === 'dashboard') loadDashboard();
-    else if (AppState.currentView === 'orders') loadOrders();
+  try {
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="ti ti-loader"></i> Guardando Pedido...';
+    }
+
+    const created = await API.createOrder(payload);
+    UI.closeModal('modal-order');
+    UI.showToast(`¡Pedido #${created.order_number} registrado con éxito!`, 'success');
+
+    // Refrescar vistas inmediatamente
+    Promise.all([refreshInventoryState(), refreshCustomersState()]).finally(() => {
+      if (AppState.currentView === 'dashboard') loadDashboard();
+      else if (AppState.currentView === 'orders') loadOrders();
+    });
   } catch (err) {
     UI.showToast(err.message, 'error');
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="ti ti-check"></i> Guardar y Confirmar Pedido';
+    }
   }
 }
 
