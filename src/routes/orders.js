@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const { query, get, run, transaction } = require('../database/db');
 
@@ -140,6 +140,24 @@ router.get('/', (req, res) => {
         sql += ` ORDER BY o.delivery_date ASC, o.delivery_time ASC, o.id DESC`;
 
         const orders = query(sql, params);
+        if (orders.length > 0) {
+            const orderIds = orders.map(o => o.id);
+            const placeholders = orderIds.map(() => '?').join(',');
+            const allItems = query(`
+                SELECT oi.id, oi.order_id, oi.product_id, oi.quantity, oi.unit_price, oi.subtotal, oi.notes, p.name as product_name, p.category as product_category
+                FROM order_items oi
+                JOIN products p ON oi.product_id = p.id
+                WHERE oi.order_id IN (${placeholders})
+            `, orderIds);
+            const itemsByOrder = {};
+            for (const it of allItems) {
+                if (!itemsByOrder[it.order_id]) itemsByOrder[it.order_id] = [];
+                itemsByOrder[it.order_id].push(it);
+            }
+            for (const o of orders) {
+                o.items = itemsByOrder[o.id] || [];
+            }
+        }
         res.json(orders);
     } catch (err) {
         console.error('Error listando pedidos:', err);

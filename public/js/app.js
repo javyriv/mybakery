@@ -607,6 +607,37 @@ function renderOrderCardHtml(order, isDashboard = false) {
     ? `<button class="btn btn-secondary btn-sm" onclick="openPaymentModal('${order.id}')"><i class="ti ti-cash"></i> Abonar</button>`
     : '';
 
+  const itemsList = order.items || [];
+  const itemsHtml = itemsList.length > 0 
+    ? `
+      <div style="background: var(--cream-50); border: 1px dashed var(--cream-300); border-radius: var(--radius-sm); padding: 8px 12px; margin: 8px 0;">
+        <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--primary-800); letter-spacing: 0.5px; margin-bottom: 5px; display: flex; align-items: center; gap: 5px;">
+          <i class="ti ti-cake" style="color: var(--primary-600); font-size: 14px;"></i> Detalle del Pedido (${itemsList.length}):
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 4px;">
+          ${itemsList.map(it => `
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--cream-900); padding: 2px 0;">
+              <div>
+                <span style="display: inline-block; font-weight: 700; color: var(--primary-800); background: var(--primary-100); padding: 1px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">
+                  ${it.quantity}x
+                </span>
+                <span style="font-weight: 600;">${it.product_name || 'Producto'}</span>
+                ${it.notes ? `<span style="font-size: 11px; color: var(--cream-600); margin-left: 4px;">(${it.notes})</span>` : ''}
+              </div>
+              <div style="font-size: 12px; font-weight: 600; color: var(--cream-700);">
+                ${UI.formatCurrency(it.subtotal || (it.quantity * (it.unit_price || 0)))}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `
+    : (order.items_count !== undefined && order.items_count > 0 ? `
+      <div style="background: var(--cream-50); border: 1px dashed var(--cream-300); border-radius: var(--radius-sm); padding: 6px 10px; margin: 6px 0; font-size: 12px; color: var(--cream-700);">
+        <i class="ti ti-basket"></i> Contiene ${order.items_count} producto(s)
+      </div>
+    ` : '');
+
   return `
     <div class="item-card">
       <div class="item-card-top">
@@ -626,6 +657,7 @@ function renderOrderCardHtml(order, isDashboard = false) {
         <div class="detail-pill">Saldo: <strong style="color:${order.pending_balance > 0 ? 'var(--danger)' : 'var(--success)'}">${UI.formatCurrency(order.pending_balance)}</strong></div>
         <div class="detail-pill">${UI.getPaymentBadge(order.payment_status)}</div>
       </div>
+      ${itemsHtml}
       ${order.notes ? `<div style="font-size:12px; color:var(--cream-700); font-style:italic;">📝 ${order.notes}</div>` : ''}
       <div class="item-card-actions">
         <button class="btn btn-secondary btn-sm btn-icon" title="Ver Recibo" onclick="openTicketModal('${order.id}')">
