@@ -11,7 +11,9 @@ const AppState = {
   orderItemsBuilder: [],
   recipeItemsBuilder: [],
   chartInstance: null,
-  activeTicketOrder: null
+  activeTicketOrder: null,
+  currentUser: null,
+  users: []
 };
 
 // Inicialización de la aplicación al cargar el DOM
@@ -33,11 +35,25 @@ document.addEventListener('DOMContentLoaded', async () => {
     refreshCustomersState()
   ]);
 
-  switchView('dashboard');
+  if (checkAuthSession()) {
+    switchView('dashboard');
+  }
 });
 
 // Navegación entre Vistas
 function switchView(viewName, filterParam = null) {
+  if (!AppState.currentUser && viewName !== 'login') {
+    UI.openModal('modal-login');
+    return;
+  }
+
+  if (viewName === 'users') {
+    if (AppState.currentUser && AppState.currentUser.role !== 'ADMIN') {
+      UI.showToast('Solo administradores pueden gestionar usuarios', 'warning');
+      return;
+    }
+  }
+
   AppState.currentView = viewName;
 
   // Actualizar visibilidad de secciones
@@ -68,6 +84,7 @@ function switchView(viewName, filterParam = null) {
   }
   if (viewName === 'customers') renderCustomersList();
   if (viewName === 'metrics') loadMetrics(AppState.metricsPeriod);
+  if (viewName === 'users') loadUsers();
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -1712,4 +1729,249 @@ function createOrderFromQuotation() {
       }
     }
   }, 200);
+}
+
+// ==================== MÓDULO DE AUTENTICACIÓN Y SESIÓN ====================
+function checkAuthSession() {
+  try {
+    const raw = localStorage.getItem('dulce_menta_session');
+    if (!raw) {
+      AppState.currentUser = null;
+      updateHeaderUserUI();
+      UI.openModal('modal-login');
+      return false;
+    }
+    const sessionUser = JSON.parse(raw);
+    if (!sessionUser || !sessionUser.id || !sessionUser.username) {
+      AppState.currentUser = null;
+      updateHeaderUserUI();
+      UI.openModal('modal-login');
+      return false;
+    }
+
+    AppState.currentUser = sessionUser;
+    updateHeaderUserUI();
+    UI.closeModal('modal-login');
+    return true;
+  } catch (e) {
+    AppState.currentUser = null;
+    updateHeaderUserUI();
+    UI.openModal('modal-login');
+    return false;
+  }
+}
+
+function updateHeaderUserUI() {
+  const container = document.getElementById('header-user-profile');
+  const dnavUsers = document.getElementById('dnav-users');
+  const bnavUsers = document.getElementById('bnav-users');
+
+  if (!container) return;
+
+  if (AppState.currentUser) {
+    container.style.display = 'flex';
+    document.getElementById('header-user-name').textContent = AppState.currentUser.name;
+    document.getElementById('header-user-role').textContent = AppState.currentUser.role;
+    
+    // Si no es admin, ocultar pestaña de usuarios
+    const isAdmin = AppState.currentUser.role === 'ADMIN';
+    if (dnavUsers) dnavUsers.style.display = isAdmin ? 'inline-flex' : 'none';
+    if (bnavUsers) bnavUsers.style.display = isAdmin ? 'flex' : 'none';
+  } else {
+    container.style.display = 'none';
+    if (dnavUsers) dnavUsers.style.display = 'none';
+    if (bnavUsers) bnavUsers.style.display = 'none';
+  }
+}
+
+async function submitLogin(e) {
+  e.preventDefault();
+  const username = document.getElementById('login-username-input').value.trim();
+  const password = document.getElementById('login-password-input').value;
+  const submitBtn = document.getElementById('btn-login-submit');
+
+  try {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="ti ti-loader"></i> Verificando...';
+
+    const res = await API.login({ username, password }).catch(() => API.login(username, password));
+    const user = res.user || res;
+
+    AppState.currentUser = user;
+    localStorage.setItem('dulce_menta_session', JSON.stringify(user));
+
+    updateHeaderUserUI();
+    UI.closeModal('modal-login');
+    document.getElementById('form-login').reset();
+    UI.showToast(res.message || `¡Bienvenido(a), ${user.name}!`, 'success');
+
+    switchView('dashboard');
+  } catch (err) {
+    UI.showToast(err.message || 'Usuario o contraseña incorrectos', 'error');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="ti ti-login"></i> Iniciar Sesión';
+  }
+}
+
+function logoutUser() {
+  if (!confirm('¿Deseas cerrar tu sesión en Dulce Menta?')) return;
+  localStorage.removeItem('dulce_menta_session');
+  AppState.currentUser = null;
+  updateHeaderUserUI();
+  UI.openModal('modal-login');
+  UI.showToast('Sesión finalizada', 'info');
+}
+
+// ==================== MÓDULO DE GESTIÓN DE USUARIOS ====================
+async function loadUsers() {
+  try {
+    AppState.users = await API.getUsers();
+    renderUsersList();
+  } catch (err) {
+    UI.showToast(err.message, 'error');
+  }
+}
+
+function renderUsersList() {
+  const container = document.getElementById('users-list-container');
+  if (!container) return;
+
+  if (AppState.users.length === 0) {
+    container.innerHTML = '<div style="text-align:center; padding:30px; color:var(--cream-500);">No hay usuarios registrados.</div>';
+    return;
+  }
+
+  container.innerHTML = AppState.users.map(u => {
+    const isMainAdmin = u.username === 'admin';
+    const isCurrent = AppState.currentUser && (String(AppState.currentUser.id) === String(u.id));
+
+    return `
+      <div class="item-card ${u.status === 'INACTIVO' ? 'alert-border' : ''}">
+        <div class="item-card-top">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <div style="width:42px; height:42px; border-radius:50%; background:var(--primary-100); color:var(--primary-800); display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:700;">
+              <i class="ti ti-user"></i>
+            </div>
+            <div>
+              <div class="item-card-title">${u.name} ${isCurrent ? '<span style="font-size:11px; color:var(--primary-600); font-weight:600;">(Tú)</span>' : ''}</div>
+              <div class="item-card-meta">
+                @${u.username} • ${u.status === 'ACTIVO' ? '<span class="badge badge-success" style="font-size:10px;">Activo</span>' : '<span class="badge badge-danger" style="font-size:10px;">Inactivo</span>'}
+              </div>
+            </div>
+          </div>
+          <div>
+            ${UI.getUserRoleBadge(u.role)}
+          </div>
+        </div>
+
+        <div class="item-card-details">
+          <div class="detail-pill">Rol: <strong>${u.role}</strong></div>
+          <div class="detail-pill">Estado: <strong>${u.status}</strong></div>
+          <div class="detail-pill">ID Sistema: <strong>#${u.id}</strong></div>
+        </div>
+
+        <div class="item-card-actions">
+          <button class="btn btn-secondary btn-sm" onclick="openEditUserModal('${u.id}')">
+            <i class="ti ti-edit"></i> Editar
+          </button>
+          ${!isMainAdmin ? `
+            <button class="btn btn-danger btn-sm" title="Eliminar Usuario" onclick="confirmDeleteUser('${u.id}', '${escapeQuotes(u.name)}')">
+              <i class="ti ti-trash"></i> Eliminar
+            </button>
+          ` : '<span style="font-size:11px; color:var(--cream-500); padding:4px 8px;"><i class="ti ti-shield-lock"></i> Cuenta Principal</span>'}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function openNewUserModal() {
+  document.getElementById('form-user').reset();
+  document.getElementById('user-edit-id').value = '';
+  document.getElementById('modal-user-title').innerHTML = '<i class="ti ti-user-plus"></i> Nuevo Usuario';
+  document.getElementById('user-password-label').innerHTML = 'Contraseña *';
+  document.getElementById('user-password-input').required = true;
+  document.getElementById('user-password-input').placeholder = 'Contraseña segura...';
+  document.getElementById('btn-save-user').innerHTML = '<i class="ti ti-check"></i> Registrar Usuario';
+  UI.openModal('modal-user');
+}
+
+async function openEditUserModal(userId) {
+  let user = AppState.users.find(u => String(u.id) === String(userId));
+  if (!user) {
+    try {
+      user = await API.getUser(userId);
+    } catch (e) {
+      UI.showToast('Usuario no encontrado', 'error');
+      return;
+    }
+  }
+
+  document.getElementById('form-user').reset();
+  document.getElementById('user-edit-id').value = user.id;
+  document.getElementById('modal-user-title').innerHTML = `<i class="ti ti-edit"></i> Editar Usuario (@${user.username})`;
+  document.getElementById('user-name-input').value = user.name;
+  document.getElementById('user-username-input').value = user.username;
+  document.getElementById('user-password-label').innerHTML = 'Nueva Contraseña (Opcional)';
+  document.getElementById('user-password-input').required = false;
+  document.getElementById('user-password-input').placeholder = 'Dejar en blanco para mantener la actual';
+  document.getElementById('user-role-select').value = user.role;
+  document.getElementById('user-status-select').value = user.status;
+  document.getElementById('btn-save-user').innerHTML = '<i class="ti ti-check"></i> Guardar Cambios';
+
+  UI.openModal('modal-user');
+}
+
+async function submitUser(e) {
+  e.preventDefault();
+  const editId = document.getElementById('user-edit-id').value;
+  const name = document.getElementById('user-name-input').value.trim();
+  const username = document.getElementById('user-username-input').value.trim();
+  const password = document.getElementById('user-password-input').value;
+  const role = document.getElementById('user-role-select').value;
+  const status = document.getElementById('user-status-select').value;
+
+  try {
+    if (editId) {
+      const payload = { name, username, role, status };
+      if (password && password.trim()) payload.password = password.trim();
+      await API.updateUser(editId, payload);
+      UI.showToast('Usuario actualizado con éxito', 'success');
+
+      if (AppState.currentUser && String(AppState.currentUser.id) === String(editId)) {
+        AppState.currentUser.name = name;
+        AppState.currentUser.username = username;
+        AppState.currentUser.role = role;
+        localStorage.setItem('dulce_menta_session', JSON.stringify(AppState.currentUser));
+        updateHeaderUserUI();
+      }
+    } else {
+      if (!password || !password.trim()) {
+        UI.showToast('La contraseña es obligatoria para nuevos usuarios', 'warning');
+        return;
+      }
+      await API.createUser({ name, username, password: password.trim(), role, status });
+      UI.showToast('Usuario creado con éxito', 'success');
+    }
+
+    UI.closeModal('modal-user');
+    loadUsers();
+  } catch (err) {
+    UI.showToast(err.message, 'error');
+  }
+}
+
+async function confirmDeleteUser(userId, userName) {
+  if (!confirm(`¿Estás seguro de eliminar al usuario '${userName}'? Ya no podrá ingresar al sistema.`)) {
+    return;
+  }
+
+  try {
+    const res = await API.deleteUser(userId);
+    UI.showToast(res.message || 'Usuario eliminado', 'success');
+    loadUsers();
+  } catch (err) {
+    UI.showToast(err.message, 'error');
+  }
 }

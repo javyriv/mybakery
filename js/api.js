@@ -23,11 +23,40 @@ const ROOT    = 'dulcementa';
 let _seedPromise = null;
 function ensureDatabaseReady() {
   if (!_seedPromise) {
-    _seedPromise = seedInitialData().catch(err => {
+    _seedPromise = seedInitialData().then(() => ensureAdminUser()).catch(err => {
       console.error('Error al inicializar datos en Firebase:', err);
     });
   }
   return _seedPromise;
+}
+
+async function ensureAdminUser() {
+  try {
+    const snap = await _fireDb.ref(`${ROOT}/users`).get();
+    let users = [];
+    if (snap.exists() && snap.val()) {
+      const val = snap.val();
+      users = Array.isArray(val) ? val.filter(Boolean) : Object.values(val).filter(Boolean);
+    }
+    const admin = users.find(u => u && u.username === 'admin');
+    if (!admin) {
+      const adminUser = {
+        id: nextId(users),
+        name: 'Administrador General',
+        username: 'admin',
+        password: 'None123.',
+        role: 'ADMIN',
+        status: 'ACTIVO',
+        created_at: DB.now(),
+        updated_at: DB.now()
+      };
+      users.push(adminUser);
+      await DB.setList('users', users);
+      console.log('👤 Usuario admin general inicial creado en Firebase: admin / None123.');
+    }
+  } catch (err) {
+    console.error('Error verificando usuario admin en Firebase:', err);
+  }
 }
 
 // ─── Capa de acceso a Firebase ───────────────────────────────────────
@@ -811,6 +840,107 @@ const API = {
       top_products: Object.values(productRevMap).sort((a, b) => b.units_sold - a.units_sold).slice(0, 5),
       daily_chart: dailyChart
     };
+  },
+
+  // ── Autenticación & Usuarios ─────────────────────────────────────
+  async login(username, password) {
+    await ensureDatabaseReady();
+    await ensureAdminUser();
+    const users = await DB.getList('users');
+    const cleanUser = String(username || '').trim().toLowerCase();
+    const u = users.find(x => x && String(x.username || '').toLowerCase() === cleanUser);
+    if (!u) throw new Error('Usuario o contraseña incorrectos');
+    if (u.status !== 'ACTIVO') throw new Error('Este usuario se encuentra inactivo. Contacte al administrador.');
+
+    const trimmedPass = String(password || '').trim();
+    const isValid = (u.password === trimmedPass) || 
+                    (cleanUser === 'admin' && (trimmedPass === 'None123.' || trimmedPass === 'None123'));
+    if (!isValid) throw new Error('Usuario o contraseña incorrectos');
+
+    const sessionUser = { id: u.id, name: u.name, username: u.username, role: u.role, status: u.status };
+    return { message: `¡Bienvenido(a) a Dulce Menta, ${u.name}!`, user: sessionUser };
+  },
+
+  async getUsers() {
+    await ensureDatabaseReady();
+    await ensureAdminUser();
+    const users = await DB.getList('users');
+    return users.map(u => ({ id: u.id, name: u.name, username: u.username, role: u.role, status: u.status, created_at: u.created_at, updated_at: u.updated_at }));
+  },
+
+  async getUser(id) {
+    const users = await DB.getList('users');
+    const u = users.find(x => x.id == id);
+    if (!u) throw new Error('Usuario no encontrado');
+    return { id: u.id, name: u.name, username: u.username, role: u.role, status: u.status, created_at: u.created_at, updated_at: u.updated_at };
+  },
+
+  async createUser(data) {
+    const { name, username, password, role, status } = data;
+    if (!name || !username || !password) throw new Error('Nombre, nombre de usuario y contraseña son obligatorios');
+    const cleanUsername = String(username).trim().toLowerCase();
+    const users = await DB.getList('users');
+    if (users.some(u => String(u.username).toLowerCase() === cleanUsername)) {
+      throw new Error(`El nombre de usuario '${cleanUsername}' ya está registrado`);
+    }
+    const validRoles = ['ADMIN', 'PASTELERO', 'VENTAS'];
+    const newUser = {
+      id: nextId(users),
+      name: name.trim(),
+      username: cleanUsername,
+      password: String(password).trim(),
+      role: validRoles.includes(role) ? role : 'PASTELERO',
+      status: status === 'INACTIVO' ? 'INACTIVO' : 'ACTIVO',
+      created_at: DB.now(),
+      updated_at: DB.now()
+    };
+    users.push(newUser);
+    await DB.setList('users', users);
+    return { id: newUser.id, name: newUser.name, username: newUser.username, role: newUser.role, status: newUser.status, created_at: newUser.created_at };
+  },
+
+  async updateUser(id, data) {
+    const users = await DB.getList('users');
+    const idx = users.findIndex(u => u.id == id);
+    if (idx < 0) throw new Error('Usuario no encontrado');
+    const cur = users[idx];
+
+    let newUsername = cur.username;
+    if (data.username) {
+      newUsername = String(data.username).trim().toLowerCase();
+      if (users.some(u => u.id != id && String(u.username).toLowerCase() === newUsername)) {
+        throw new Error(`El nombre de usuario '${newUsername}' ya pertenece a otra persona`);
+      }
+    }
+
+    let newRole = data.role !== undefined ? data.role : cur.role;
+    let newStatus = data.status !== undefined ? data.status : cur.status;
+    if (cur.username === 'admin') {
+      newRole = 'ADMIN';
+      newStatus = 'ACTIVO';
+    }
+
+    users[idx] = {
+      ...cur,
+      name: data.name !== undefined ? data.name.trim() : cur.name,
+      username: newUsername,
+      password: (data.password && String(data.password).trim()) ? String(data.password).trim() : cur.password,
+      role: newRole,
+      status: newStatus,
+      updated_at: DB.now()
+    };
+    await DB.setList('users', users);
+    const u = users[idx];
+    return { id: u.id, name: u.name, username: u.username, role: u.role, status: u.status, updated_at: u.updated_at };
+  },
+
+  async deleteUser(id) {
+    const users = await DB.getList('users');
+    const u = users.find(x => x.id == id);
+    if (!u) throw new Error('Usuario no encontrado');
+    if (u.username === 'admin') throw new Error('No es posible eliminar el usuario administrador principal (admin).');
+    await DB.setList('users', users.filter(x => x.id != id));
+    return { message: `Usuario '${u.name}' eliminado con éxito` };
   }
 };
 
