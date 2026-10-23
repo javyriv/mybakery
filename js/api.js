@@ -635,9 +635,26 @@ const API = {
 
   // ── Pedidos ──────────────────────────────────────────────────────
   async getOrders(params = {}) {
-    const [orders, customers] = await Promise.all([DB.getList('orders'), DB.getList('customers')]);
+    const [orders, customers, allItems, allProducts] = await Promise.all([
+      DB.getList('orders'),
+      DB.getList('customers'),
+      DB.getList('order_items'),
+      DB.getList('products')
+    ]);
     const today = DB.today();
-    let result = orders.map(o => enrichOrderSync(o, customers));
+    let result = orders.map(o => {
+      const enriched = enrichOrderSync(o, customers);
+      const items = allItems.filter(i => i.order_id == o.id).map(item => {
+        const prod = allProducts.find(p => p.id === item.product_id);
+        return {
+          ...item,
+          product_name: prod ? prod.name : '—',
+          product_category: prod ? prod.category : '',
+          yield_unit: prod ? prod.yield_unit : ''
+        };
+      });
+      return { ...enriched, items };
+    });
     if (params.status)         result = result.filter(o => o.status === params.status);
     if (params.payment_status) result = result.filter(o => o.payment_status === params.payment_status);
     if (params.date)                      result = result.filter(o => o.delivery_date === params.date);
