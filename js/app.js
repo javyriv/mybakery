@@ -248,20 +248,23 @@ function renderProductsList() {
         <div class="detail-pill">Ingredientes: <strong>${p.ingredients_count}</strong></div>
       </div>
       <div class="item-card-actions">
-        <button class="btn btn-primary btn-sm" onclick="openRecipeQuotationModal(${p.id})">
+        <button class="btn btn-primary btn-sm" onclick="openRecipeQuotationModal('${p.id}')">
           <i class="ti ti-calculator"></i> Ver Receta & Cotizar
         </button>
-        <button class="btn btn-secondary btn-sm" title="Editar Producto y Receta" onclick="openEditProductModal(${p.id})">
+        <button class="btn btn-secondary btn-sm" title="Editar Producto y Receta" onclick="openEditProductModal('${p.id}')">
           <i class="ti ti-edit"></i> Editar
         </button>
-        <button class="btn btn-secondary btn-sm" onclick="quickSelectProductForProjection(${p.id})">
+        <button class="btn btn-secondary btn-sm" title="Copiar / Duplicar Receta Completa" onclick="duplicateRecipe('${p.id}')">
+          <i class="ti ti-copy"></i> Copiar
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="quickSelectProductForProjection('${p.id}')">
           <i class="ti ti-flame"></i> Hornear
         </button>
         ${p.ingredients_count > 0 ? `
-        <button class="btn btn-secondary btn-sm" title="Vaciar ingredientes de la receta" onclick="confirmDeleteRecipe(${p.id}, '${escapeQuotes(p.name)}')">
+        <button class="btn btn-secondary btn-sm" title="Vaciar ingredientes de la receta" onclick="confirmDeleteRecipe('${p.id}', '${escapeQuotes(p.name)}')">
           <i class="ti ti-tools-kitchen-2-off"></i> Vaciar
         </button>` : ''}
-        <button class="btn btn-danger btn-sm" title="Eliminar Producto" onclick="confirmDeleteProduct(${p.id}, '${escapeQuotes(p.name)}')">
+        <button class="btn btn-danger btn-sm" title="Eliminar Producto" onclick="confirmDeleteProduct('${p.id}', '${escapeQuotes(p.name)}')">
           <i class="ti ti-trash"></i>
         </button>
       </div>
@@ -308,6 +311,51 @@ async function openEditProductModal(productId) {
     }
 
     UI.openModal('modal-new-product');
+  } catch (err) {
+    UI.showToast(err.message, 'error');
+  }
+}
+
+// Duplicar / Copiar Receta Completa
+async function duplicateRecipe(productId) {
+  try {
+    if (!AppState.ingredients || AppState.ingredients.length === 0) {
+      await refreshInventoryState();
+    }
+    const product = await API.getProduct(productId);
+    document.getElementById('form-new-product').reset();
+
+    // Al ser una receta clonada, el ID va vacío para que se cree como producto NUEVO
+    document.getElementById('prod-edit-id').value = '';
+    document.getElementById('modal-product-title').innerHTML = '<i class="ti ti-copy"></i> Duplicar / Copiar Receta';
+    document.getElementById('btn-save-product').innerHTML = '<i class="ti ti-plus"></i> Guardar como Nuevo Producto & Receta';
+
+    // Precargar datos del producto original sugiriendo "(Copia)" en el nombre
+    document.getElementById('prod-name-input').value = `${product.name} (Copia)`;
+    document.getElementById('prod-category-select').value = product.category;
+    document.getElementById('prod-price-input').value = product.sale_price;
+    document.getElementById('prod-yield-qty-input').value = product.yield_quantity || 1;
+    document.getElementById('prod-yield-unit-input').value = product.yield_unit || 'unidad';
+    document.getElementById('prod-raw-weight-input').value = product.raw_weight || '';
+    document.getElementById('prod-raw-weight-unit-select').value = product.raw_weight_unit || 'g';
+    updateBatchWeightPreview();
+    document.getElementById('prod-desc-input').value = product.description || '';
+
+    // Copiar todos los ingredientes y cantidades de la receta original
+    AppState.recipeItemsBuilder = [];
+    const container = document.getElementById('recipe-items-builder');
+    container.innerHTML = '';
+
+    if (Array.isArray(product.recipe) && product.recipe.length > 0) {
+      product.recipe.forEach(it => {
+        addRecipeItemRow(it.ingredient_id, it.recipe_quantity);
+      });
+    } else {
+      addRecipeItemRow();
+    }
+
+    UI.openModal('modal-new-product');
+    UI.showToast(`Receta de '${product.name}' cargada para duplicar. Ajusta el nombre o ingredientes y guárdala.`, 'info', 4000);
   } catch (err) {
     UI.showToast(err.message, 'error');
   }
@@ -1397,9 +1445,14 @@ async function openRecipeQuotationModal(productId) {
             <span class="badge badge-mint" style="margin-bottom:4px;">${product.category}</span>
             <div style="font-size:13px; color:var(--cream-700);">${product.description || 'Sin descripción adicional.'}</div>
           </div>
-          <div style="text-align:right;">
-            <div style="font-size:11px; text-transform:uppercase; color:var(--cream-500); font-weight:700;">Precio de Venta Sugerido</div>
-            <div style="font-size:20px; font-weight:800; color:var(--primary-700);">${UI.formatCurrency(product.sale_price)}</div>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <button type="button" class="btn btn-secondary btn-sm" title="Duplicar esta receta como base" onclick="UI.closeModal('modal-recipe-quotation'); duplicateRecipe('${product.id}');">
+              <i class="ti ti-copy"></i> Copiar Receta
+            </button>
+            <div style="text-align:right;">
+              <div style="font-size:11px; text-transform:uppercase; color:var(--cream-500); font-weight:700;">Precio de Venta Sugerido</div>
+              <div style="font-size:20px; font-weight:800; color:var(--primary-700);">${UI.formatCurrency(product.sale_price)}</div>
+            </div>
           </div>
         </div>
 
