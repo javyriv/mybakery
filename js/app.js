@@ -1738,6 +1738,8 @@ function checkAuthSession() {
     if (!raw) {
       AppState.currentUser = null;
       updateHeaderUserUI();
+      const loginForm = document.getElementById('form-login');
+      if (loginForm) loginForm.reset();
       UI.openModal('modal-login');
       return false;
     }
@@ -1745,6 +1747,8 @@ function checkAuthSession() {
     if (!sessionUser || !sessionUser.id || !sessionUser.username) {
       AppState.currentUser = null;
       updateHeaderUserUI();
+      const loginForm = document.getElementById('form-login');
+      if (loginForm) loginForm.reset();
       UI.openModal('modal-login');
       return false;
     }
@@ -1756,6 +1760,8 @@ function checkAuthSession() {
   } catch (e) {
     AppState.currentUser = null;
     updateHeaderUserUI();
+    const loginForm = document.getElementById('form-login');
+    if (loginForm) loginForm.reset();
     UI.openModal('modal-login');
     return false;
   }
