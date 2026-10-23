@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Dulce Menta — Panadería & Repostería Artesanal</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="app-header">
+    <div class="brand-container">
+      <div class="brand-logo"><i class="ti ti-cake"></i></div>
+      <div class="brand-text">
+        <h1 id="header-bakery-name">Dulce Menta</h1>
+        <span>Panadería & Repostería</span>
+      </div>
+    </div>
+
+    <nav class="desktop-nav">
+      <button class="nav-item active" id="dnav-dashboard" onclick="switchView('dashboard')">
+        <i class="ti ti-layout-dashboard"></i> Inicio
+      </button>
+      <button class="nav-item" id="dnav-production" onclick="switchView('production')">
+        <i class="ti ti-tools-kitchen-2"></i> Recetas & Costos
+      </button>
+      <button class="nav-item" id="dnav-inventory" onclick="switchView('inventory')">
+        <i class="ti ti-package"></i> Inventario
+      </button>
+      <button class="nav-item" id="dnav-orders" onclick="switchView('orders')">
+        <i class="ti ti-clipboard-list"></i> Pedidos
+      </button>
+      <button class="nav-item" id="dnav-customers" onclick="switchView('customers')">
+        <i class="ti ti-users"></i> Clientes
+      </button>
+      <button class="nav-item" id="dnav-metrics" onclick="switchView('metrics')">
+        <i class="ti ti-chart-bar"></i> Finanzas
+      </button>
+    </nav>
+
+    <div class="header-actions">
+      <button class="header-badge-btn" title="Alertas de Inventario" onclick="switchView('inventory', 'ALERTS')">
+        <i class="ti ti-bell"></i>
+        <span class="badge-dot" id="header-alert-count" style="display:none;">0</span>
+      </button>
+      <button class="btn btn-primary btn-sm" onclick="openNewOrderModal()">
+        <i class="ti ti-plus"></i> <span>Tomar Pedido</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="main-content">
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- VISTA 1: DASHBOARD -->
+    <section id="view-dashboard" class="app-view">
+      <div id="dashboard-stock-alert" class="alert-banner" style="display:none;">
+        <div class="alert-banner-content">
+          <i class="ti ti-alert-triangle-filled"></i>
+          <div>
+            <div class="alert-banner-title">Materia Prima en Stock Crítico</div>
+            <div class="alert-banner-desc" id="dashboard-stock-alert-text">Insumos bajo mínimo.</div>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="switchView('inventory', 'ALERTS')">Revisar</button>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card mint">
+          <span class="stat-label">Pedidos para Hoy</span>
+          <span class="stat-value" id="stat-orders-today">0</span>
+          <span class="stat-sub" id="stat-orders-today-sub">0 pendientes</span>
+        </div>
+        <div class="stat-card orange">
+          <span class="stat-label">Por Cobrar (Pendiente)</span>
+          <span class="stat-value" id="stat-receivables">₡0</span>
+          <span class="stat-sub">Cuentas por cobrar</span>
+        </div>
+        <div class="stat-card blue">
+          <span class="stat-label">Ventas del Mes</span>
+          <span class="stat-value" id="stat-month-sales">₡0</span>
+          <span class="stat-sub" id="stat-month-orders">0 pedidos</span>
+        </div>
+        <div class="stat-card red">
+          <span class="stat-label">Stock en Alerta</span>
+          <span class="stat-value" id="stat-low-stock-count">0</span>
+          <span class="stat-sub">Bajo mínimo</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-bolt"></i> Acciones Rápidas</div>
+        </div>
+        <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+          <button class="btn btn-primary" onclick="openNewOrderModal()"><i class="ti ti-calendar-plus"></i> Tomar Pedido</button>
+          <button class="btn btn-accent" onclick="switchView('production')"><i class="ti ti-calculator"></i> Proyectar Costos</button>
+          <button class="btn btn-secondary" onclick="openStockAdjustmentModal()"><i class="ti ti-truck-delivery"></i> Registrar Compra</button>
+          <button class="btn btn-secondary" onclick="openNewCustomerModal()"><i class="ti ti-user-plus"></i> Nuevo Cliente</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-calendar-event"></i> Agenda de Entregas (Hoy)</div>
+          <button class="btn btn-secondary btn-sm" onclick="switchView('orders', 'today')">Ver Todos</button>
+        </div>
+        <div id="dashboard-today-orders-list"></div>
+      </div>
+    </section>
+
+    <!-- VISTA 2: RECETAS & PROYECCIÓN -->
+    <section id="view-production" class="app-view" style="display:none;">
+      <div class="card" style="border: 2px solid var(--primary-300);">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-calculator"></i> Módulo de Proyección & Costos</div>
+          <span class="badge badge-mint">Escalabilidad de Insumos</span>
+        </div>
+        <p style="font-size:13px; color:var(--cream-700); margin-bottom:14px;">
+          Selecciona un producto y la cantidad deseada. Calcula al instante los insumos totales necesarios, 
+          compara contra el stock actual en almacén y estima costo de inversión vs. precio de venta y margen.
+        </p>
+
+        <div style="display:grid; grid-template-columns: 1fr 120px; gap: 10px; margin-bottom: 14px;">
+          <div>
+            <label class="form-label">Producto a Elaborar</label>
+            <select id="proj-product-select" class="form-control" onchange="runProductionProjection()"></select>
+          </div>
+          <div>
+            <label class="form-label">Cantidad</label>
+            <input type="number" id="proj-quantity-input" class="form-control" value="10" min="1" step="1" oninput="runProductionProjection()">
+          </div>
+        </div>
+
+        <div id="projection-results-container" style="display:none;">
+          <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom:14px;">
+            <div class="stat-card mint">
+              <span class="stat-label">Costo Total Materia Prima</span>
+              <span class="stat-value" id="proj-total-cost">₡0</span>
+              <span class="stat-sub" id="proj-unit-cost">₡0 por unidad</span>
+            </div>
+            <div class="stat-card blue">
+              <span class="stat-label">Venta Estimada & Margen</span>
+              <span class="stat-value" id="proj-total-revenue">₡0</span>
+              <span class="stat-sub" id="proj-profit-margin">Margen: 0%</span>
+            </div>
+          </div>
+
+          <div style="background:var(--cream-100); border-radius:var(--radius-md); padding:12px; margin-bottom:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <span style="font-weight:700; font-size:14px; color:var(--primary-950);">
+                <i class="ti ti-list-check"></i> Insumos Requeridos vs. Stock en Almacén
+              </span>
+              <span id="proj-stock-status-badge" class="badge"></span>
+            </div>
+            <div id="proj-ingredients-table" style="max-height: 250px; overflow-y: auto;"></div>
+          </div>
+
+          <button id="btn-execute-production" class="btn btn-primary btn-block" onclick="executeProductionBatch()">
+            <i class="ti ti-flame"></i> Ejecutar Producción / Descontar Insumos del Inventario
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-cake"></i> Catálogo de Productos & Recetas</div>
+          <button class="btn btn-primary btn-sm" onclick="openNewProductModal()"><i class="ti ti-plus"></i> Nuevo Producto</button>
+        </div>
+        <div id="products-list-container"></div>
+      </div>
+    </section>
+
+    <!-- VISTA 3: INVENTARIO -->
+    <section id="view-inventory" class="app-view" style="display:none;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-package"></i> Inventario de Materia Prima</div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn btn-secondary btn-sm" onclick="openStockAdjustmentModal()"><i class="ti ti-plus"></i> Compra/Ajuste</button>
+            <button class="btn btn-primary btn-sm" onclick="openNewIngredientModal()"><i class="ti ti-sparkles"></i> Nuevo Insumo</button>
+          </div>
+        </div>
+
+        <div class="filter-tabs" id="inventory-filter-tabs">
+          <button class="tab-chip active" onclick="filterInventoryCategory('ALL')">Todos</button>
+          <button class="tab-chip" onclick="filterInventoryCategory('ALERTS')">⚠️ En Alerta</button>
+          <button class="tab-chip" onclick="filterInventoryCategory('Harinas y Granos')">Harinas</button>
+          <button class="tab-chip" onclick="filterInventoryCategory('Lácteos y Huevos')">Lácteos/Huevos</button>
+          <button class="tab-chip" onclick="filterInventoryCategory('Grasas y Aceites')">Grasas</button>
+          <button class="tab-chip" onclick="filterInventoryCategory('Azúcares y Chocolates')">Azúcar/Choco</button>
+          <button class="tab-chip" onclick="filterInventoryCategory('Especias y Frutas')">Frutas/Especias</button>
+          <button class="tab-chip" onclick="filterInventoryCategory('Empaques')">Empaques</button>
+        </div>
+
+        <div class="form-group">
+          <input type="text" id="inventory-search-input" class="form-control" placeholder="🔍 Buscar insumo..." oninput="renderInventoryList()">
+        </div>
+        <div id="inventory-list-container"></div>
+      </div>
+    </section>
+
+    <!-- VISTA 4: PEDIDOS & AGENDA -->
+    <section id="view-orders" class="app-view" style="display:none;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-clipboard-list"></i> Gestión de Pedidos & Agenda</div>
+          <button class="btn btn-primary btn-sm" onclick="openNewOrderModal()"><i class="ti ti-plus"></i> Tomar Pedido</button>
+        </div>
+
+        <div class="filter-tabs">
+          <button class="tab-chip active" id="order-tab-today" onclick="filterOrdersPeriod('today')">📅 Hoy</button>
+          <button class="tab-chip" id="order-tab-tomorrow" onclick="filterOrdersPeriod('tomorrow')">Mañana</button>
+          <button class="tab-chip" id="order-tab-week" onclick="filterOrdersPeriod('week')">Esta Semana</button>
+          <button class="tab-chip" id="order-tab-all" onclick="filterOrdersPeriod('all')">Todos</button>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-bottom:14px; overflow-x:auto;">
+          <select id="orders-status-filter" class="form-control" style="max-width:180px; min-height:40px; font-size:13px;" onchange="loadOrders()">
+            <option value="">Estado: Todos</option>
+            <option value="PENDIENTE">🕒 Pendiente</option>
+            <option value="EN_PREPARACION">👨‍🍳 En Preparación</option>
+            <option value="LISTO">📦 Listo para Entregar</option>
+            <option value="ENTREGADO">✅ Entregado</option>
+            <option value="CANCELADO">❌ Cancelado</option>
+          </select>
+          <select id="orders-payment-filter" class="form-control" style="max-width:180px; min-height:40px; font-size:13px;" onchange="loadOrders()">
+            <option value="">Pago: Todos</option>
+            <option value="PENDIENTE">🔴 Pendiente</option>
+            <option value="ABONO_PARCIAL">🟡 Abono Parcial</option>
+            <option value="PAGADO">🟢 Pagado</option>
+          </select>
+        </div>
+        <div id="orders-list-container"></div>
+      </div>
+    </section>
+
+    <!-- VISTA 5: CLIENTES & PAGOS -->
+    <section id="view-customers" class="app-view" style="display:none;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-users"></i> Directorio de Clientes & Pagos</div>
+          <button class="btn btn-primary btn-sm" onclick="openNewCustomerModal()"><i class="ti ti-plus"></i> Nuevo Cliente</button>
+        </div>
+        <div class="form-group">
+          <input type="text" id="customers-search-input" class="form-control" placeholder="🔍 Buscar cliente por nombre o teléfono..." oninput="renderCustomersList()">
+        </div>
+        <div id="customers-list-container"></div>
+      </div>
+    </section>
+
+    <!-- VISTA 6: MÉTRICAS Y FINANZAS -->
+    <section id="view-metrics" class="app-view" style="display:none;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="ti ti-chart-bar"></i> Rendimiento Financiero</div>
+          <div class="filter-tabs" style="margin-bottom:0;">
+            <button class="tab-chip" id="metrics-tab-today" onclick="filterMetricsPeriod('today')">Hoy</button>
+            <button class="tab-chip" id="metrics-tab-week" onclick="filterMetricsPeriod('week')">7 Días</button>
+            <button class="tab-chip active" id="metrics-tab-month" onclick="filterMetricsPeriod('month')">Este Mes</button>
+            <button class="tab-chip" id="metrics-tab-all" onclick="filterMetricsPeriod('all')">Histórico</button>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card mint">
+            <span class="stat-label">Ingresos Totales</span>
+            <span class="stat-value" id="fin-revenue">₡0</span>
+            <span class="stat-sub" id="fin-orders-count">0 pedidos</span>
+          </div>
+          <div class="stat-card red">
+            <span class="stat-label">Costo Insumos</span>
+            <span class="stat-value" id="fin-costs">₡0</span>
+            <span class="stat-sub">Materia prima</span>
+          </div>
+          <div class="stat-card blue">
+            <span class="stat-label">Ganancia Neta</span>
+            <span class="stat-value" id="fin-net-profit">₡0</span>
+            <span class="stat-sub" id="fin-margin">Margen: 0%</span>
+          </div>
+          <div class="stat-card orange">
+            <span class="stat-label">Cuentas por Cobrar</span>
+            <span class="stat-value" id="fin-receivables">₡0</span>
+            <span class="stat-sub">Saldos pendientes</span>
+          </div>
+        </div>
+
+        <div style="background:#fff; border-radius:var(--radius-md); padding:16px; border:1px solid var(--cream-200); margin-bottom:16px;">
+          <h4 style="font-size:14px; font-weight:700; color:var(--cream-800); margin-bottom:12px;">
+            <i class="ti ti-chart-line"></i> Ventas vs. Costo de Materia Prima
+          </h4>
+          <div style="position:relative; height:240px; width:100%;">
+            <canvas id="salesCostChart"></canvas>
+          </div>
+        </div>
+
+        <div style="background:#fff; border-radius:var(--radius-md); padding:16px; border:1px solid var(--cream-200);">
+          <h4 style="font-size:14px; font-weight:700; color:var(--cream-800); margin-bottom:12px;">
+            <i class="ti ti-award"></i> Productos Más Vendidos
+          </h4>
+          <div id="metrics-top-products-list"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- BOTTOM NAVIGATION (MOBILE-FIRST) -->
+  <nav class="bottom-nav">
+    <button class="nav-item active" id="bnav-dashboard" onclick="switchView('dashboard')">
+      <i class="ti ti-layout-dashboard"></i> Inicio
+    </button>
+    <button class="nav-item" id="bnav-production" onclick="switchView('production')">
+      <i class="ti ti-tools-kitchen-2"></i> Recetas
+    </button>
+    <button class="nav-item" id="bnav-inventory" onclick="switchView('inventory')">
+      <i class="ti ti-package"></i> Stock
+    </button>
+    <button class="nav-item" id="bnav-orders" onclick="switchView('orders')">
+      <i class="ti ti-clipboard-list"></i> Pedidos
+    </button>
+    <button class="nav-item" id="bnav-customers" onclick="switchView('customers')">
+      <i class="ti ti-users"></i> Clientes
+    </button>
+    <button class="nav-item" id="bnav-metrics" onclick="switchView('metrics')">
+      <i class="ti ti-chart-bar"></i> Finanzas
+    </button>
+  </nav>
+
+  <!-- MODAL 1: NUEVO PEDIDO -->
+  <div id="modal-order" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <div class="modal-title"><i class="ti ti-clipboard-plus"></i> Tomar Nuevo Pedido</div>
+        <button class="btn-close-modal" onclick="closeModal('modal-order')">&times;</button>
+      </div>
+      <form id="form-new-order" onsubmit="submitNewOrder(event)">
+        <div class="form-group">
+          <label class="form-label">Cliente *</label>
+          <div style="display:flex; gap:8px;">
+            <select id="order-customer-select" class="form-control" required></select>
+            <button type="button" class="btn btn-secondary btn-icon" title="Crear Cliente Rápido" onclick="openNewCustomerModal(true)">
+              <i class="ti ti-user-plus"></i>
+            </button>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label class="form-label">Fecha Entrega *</label>
+            <input type="date" id="order-delivery-date" class="form-control" required>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Hora Acordada</label>
+            <input type="time" id="order-delivery-time" class="form-control" value="14:00">
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label class="form-label">Tipo de Entrega</label>
+            <select id="order-delivery-type" class="form-control" onchange="toggleOrderAddressField()">
+              <option value="RETIRO">🏠 Retiro en Tienda</option>
+              <option value="DOMICILIO">🛵 Envío a Domicilio</option>
+            </select>
+          </div>
+          <div class="form-group" id="order-address-group" style="display:none;">
+            <label class="form-label">Dirección de Envío</label>
+            <input type="text" id="order-delivery-address" class="form-control" placeholder="Dirección exacta...">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Productos *</label>
+          <div id="order-items-builder" style="display:flex; flex-direction:column; gap:8px; margin-bottom:8px;"></div>
+          <button type="button" class="btn btn-secondary btn-sm btn-block" onclick="addOrderItemRow()">
+            <i class="ti ti-plus"></i> Agregar Otro Producto
+          </button>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Notas Especiales / Dedicatoria</label>
+          <input type="text" id="order-notes" class="form-control" placeholder="Dedicatoria o empaque...">
+        </div>
+
+        <div style="background:var(--cream-100); border-radius:var(--radius-md); padding:12px; margin-bottom:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="font-weight:700; font-size:13px; color:var(--cream-900);">Total del Pedido:</span>
+            <span id="order-builder-total" style="font-size:18px; font-weight:800; color:var(--primary-700);">₡0</span>
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+            <div>
+              <label class="form-label">Monto de Abono</label>
+              <input type="number" id="order-initial-pay-amount" class="form-control" placeholder="0" min="0" step="any">
+            </div>
+            <div>
+              <label class="form-label">Método</label>
+              <select id="order-initial-pay-method" class="form-control">
+                <option value="EFECTIVO">💵 Efectivo</option>
+                <option value="SINPE_TRANSFERENCIA">📱 SINPE Móvil / Transf.</option>
+                <option value="TARJETA">💳 Tarjeta</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="order-deduct-inventory" style="width:18px; height:18px; accent-color:var(--primary-600);">
+          <label for="order-deduct-inventory" style="font-size:13px; cursor:pointer;">
+            Descontar insumos del inventario de inmediato
+          </label>
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="ti ti-check"></i> Guardar y Confirmar Pedido
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: REGISTRAR ABONO -->
+  <div id="modal-payment" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <div class="modal-title"><i class="ti ti-cash"></i> Registrar Abono de Pago</div>
+        <button class="btn-close-modal" onclick="closeModal('modal-payment')">&times;</button>
+      </div>
+      <form id="form-new-payment" onsubmit="submitPayment(event)">
+        <input type="hidden" id="pay-order-id">
+        <div style="background:var(--cream-100); border-radius:var(--radius-md); padding:12px; margin-bottom:14px;">
+          <div style="font-size:13px; color:var(--cream-700);" id="pay-order-info">Pedido: PED-2026-0001</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+            <span>Saldo Pendiente:</span>
+            <strong id="pay-order-pending-balance" style="font-size:16px; color:var(--danger);">₡0</strong>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Monto a Abonar *</label>
+          <input type="number" id="pay-amount-input" class="form-control" required min="1" step="any">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Método de Pago *</label>
+          <select id="pay-method-select" class="form-control">
+            <option value="SINPE_TRANSFERENCIA">📱 SINPE Móvil / Transferencia</option>
+            <option value="EFECTIVO">💵 Efectivo</option>
+            <option value="TARJETA">💳 Tarjeta de Débito/Crédito</option>
+            <option value="OTRO">Otro</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Número de Comprobante / Referencia</label>
+          <input type="text" id="pay-reference-input" class="form-control" placeholder="Ej: #SINPE-489201">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="ti ti-check"></i> Registrar Pago
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 3: AJUSTE DE STOCK -->
+  <div id="modal-adjust-stock" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <div class="modal-title"><i class="ti ti-truck-delivery"></i> Registrar Compra o Ajuste</div>
+        <button class="btn-close-modal" onclick="closeModal('modal-adjust-stock')">&times;</button>
+      </div>
+      <form id="form-stock-adjust" onsubmit="submitStockAdjustment(event)">
+        <div class="form-group">
+          <label class="form-label">Insumo *</label>
+          <select id="adj-ingredient-select" class="form-control" required onchange="onAdjustIngredientChange()"></select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Tipo de Movimiento</label>
+          <select id="adj-type-select" class="form-control">
+            <option value="ENTRADA">➕ Entrada por Compra / Reabastecimiento</option>
+            <option value="MERMA">➖ Salida por Merma / Vencimiento</option>
+            <option value="AJUSTE_EXACTO">🔄 Ajuste de Conteo Físico Exacto</option>
+          </select>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label class="form-label" id="adj-qty-label">Cantidad a Ingresar *</label>
+            <input type="number" id="adj-quantity-input" class="form-control" required step="any" min="0.01">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Nuevo Costo Unitario</label>
+            <input type="number" id="adj-cost-input" class="form-control" step="any" placeholder="Opcional">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Referencia / Factura</label>
+          <input type="text" id="adj-ref-input" class="form-control" placeholder="Ej: Factura #9821 Supermercado">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="ti ti-check"></i> Actualizar Inventario
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 4: NUEVO INSUMO -->
+  <div id="modal-new-ingredient" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-ingredient-title"><i class="ti ti-sparkles"></i> Nuevo Insumo de Materia Prima</div>
+        <button class="btn-close-modal" onclick="closeModal('modal-new-ingredient')">&times;</button>
+      </div>
+      <form id="form-new-ingredient" onsubmit="submitNewIngredient(event)">
+        <input type="hidden" id="ing-edit-id">
+        <div class="form-group">
+          <label class="form-label">Nombre del Insumo *</label>
+          <input type="text" id="ing-name-input" class="form-control" required placeholder="Ej: Canela en Polvo">
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label class="form-label">Categoría *</label>
+            <select id="ing-category-select" class="form-control" required>
+              <option value="Harinas y Granos">Harinas y Granos</option>
+              <option value="Lácteos y Huevos">Lácteos y Huevos</option>
+              <option value="Grasas y Aceites">Grasas y Aceites</option>
+              <option value="Azúcares y Chocolates">Azúcares y Chocolates</option>
+              <option value="Especias y Frutas">Especias y Frutas</option>
+              <option value="Empaques">Empaques</option>
+              <option value="Otros">Otros</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unidad de Medida *</label>
+            <select id="ing-unit-select" class="form-control" required>
+              <option value="kg">kg (Kilogramos)</option>
+              <option value="g">g (Gramos)</option>
+              <option value="L">L (Litros)</option>
+              <option value="ml">ml (Mililitros)</option>
+              <option value="unidad">unidad (Piezas)</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label class="form-label">Costo Unitario</label>
+            <input type="number" id="ing-cost-input" class="form-control" step="any" placeholder="0" value="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stock Inicial</label>
+            <input type="number" id="ing-stock-input" class="form-control" step="any" placeholder="0" value="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Stock Mínimo</label>
+            <input type="number" id="ing-min-input" class="form-control" step="any" placeholder="0" value="5">
+          </div>
+        </div>
+
+        <button type="submit" id="btn-save-ingredient" class="btn btn-primary btn-block">
+          <i class="ti ti-check"></i> Guardar Insumo
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 5: NUEVO PRODUCTO & RECETA -->
+  <div id="modal-new-product" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-product-title"><i class="ti ti-cake"></i> Nuevo Producto & Receta</div>
+        <button class="btn-close-modal" onclick="closeModal('modal-new-product')">&times;</button>
+      </div>
+      <form id="form-new-product" onsubmit="submitNewProduct(event)">
+        <input type="hidden" id="prod-edit-id">
+        <div class="form-group">
+          <label class="form-label">Nombre del Producto Final *</label>
+          <input type="text" id="prod-name-input" class="form-control" required placeholder="Ej: Queque Personal de Chocolate">
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label class="form-label">Categoría *</label>
+            <select id="prod-category-select" class="form-control" required>
+              <option value="Queques y Tartas">Queques y Tartas</option>
+              <option value="Panadería Artesanal">Panadería Artesanal</option>
+              <option value="Galletas">Galletas</option>
+              <option value="Repostería Fina">Repostería Fina</option>
+              <option value="Bocadillos">Bocadillos</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Precio de Venta Sugerido *</label>
+            <input type="number" id="prod-price-input" class="form-control" required step="any" placeholder="₡0">
+          </div>
+        </div>
+
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label class="form-label">Rendimiento Base</label>
+            <input type="number" id="prod-yield-qty-input" class="form-control" value="1" min="1" step="any">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Unidad</label>
+            <input type="text" id="prod-yield-unit-input" class="form-control" value="unidad">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Descripción</label>
+          <textarea id="prod-desc-input" class="form-control" placeholder="Detalles de preparación..."></textarea>
+        </div>
+
+        <div style="background:var(--cream-100); border-radius:var(--radius-md); padding:12px; margin-bottom:14px;">
+          <span style="font-weight:700; font-size:14px; color:var(--primary-900); display:block; margin-bottom:8px;">
+            <i class="ti ti-tools-kitchen-2"></i> Receta Base (Ingredientes)
+          </span>
+          <div id="recipe-items-builder" style="display:flex; flex-direction:column; gap:8px; margin-bottom:8px;"></div>
+          <button type="button" class="btn btn-secondary btn-sm btn-block" onclick="addRecipeItemRow()">
+            <i class="ti ti-plus"></i> Agregar Ingrediente
+          </button>
+        </div>
+
+        <button type="submit" id="btn-save-product" class="btn btn-primary btn-block">
+          <i class="ti ti-check"></i> Registrar Producto y Receta
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 6: NUEVO CLIENTE -->
+  <div id="modal-new-customer" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-customer-title"><i class="ti ti-user-plus"></i> Registrar Cliente</div>
+        <button class="btn-close-modal" onclick="closeModal('modal-new-customer')">&times;</button>
+      </div>
+      <form id="form-new-customer" onsubmit="submitNewCustomer(event)">
+        <input type="hidden" id="cust-edit-id">
+        <div class="form-group">
+          <label class="form-label">Nombre Completo *</label>
+          <input type="text" id="cust-name-input" class="form-control" required placeholder="Ej: Patricia Montero">
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label class="form-label">Teléfono / WhatsApp</label>
+            <input type="text" id="cust-phone-input" class="form-control" placeholder="+506 8888-0000">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Correo Electrónico</label>
+            <input type="email" id="cust-email-input" class="form-control" placeholder="cliente@correo.com">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dirección de Entrega</label>
+          <input type="text" id="cust-address-input" class="form-control" placeholder="Barrio, señas exactas...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Notas Especiales / Alergias</label>
+          <input type="text" id="cust-notes-input" class="form-control" placeholder="Ej: Alérgica al gluten...">
+        </div>
+        <button type="submit" id="btn-save-customer" class="btn btn-primary btn-block">
+          <i class="ti ti-check"></i> Guardar Cliente
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 7: TICKET / COMPROBANTE -->
+  <div id="modal-ticket" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <div class="modal-title"><i class="ti ti-receipt"></i> Comprobante de Pedido</div>
+        <button class="btn-close-modal" onclick="closeModal('modal-ticket')">&times;</button>
+      </div>
+      <div id="ticket-content" class="digital-receipt"></div>
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <button class="btn btn-secondary btn-block" onclick="window.print()"><i class="ti ti-printer"></i> Imprimir</button>
+        <button class="btn btn-primary btn-block" id="btn-share-whatsapp" onclick="shareTicketWhatsApp()"><i class="ti ti-brand-whatsapp"></i> WhatsApp</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="js/api.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
