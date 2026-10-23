@@ -417,9 +417,14 @@
           </label>
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block">
-          <i class="ti ti-check"></i> Guardar y Confirmar Pedido
-        </button>
+        <div style="display:flex; gap:10px; margin-top:14px;">
+          <button type="button" class="btn btn-secondary btn-block" onclick="closeModal('modal-order')">
+            <i class="ti ti-x"></i> Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary btn-block">
+            <i class="ti ti-check"></i> Guardar y Confirmar Pedido
+          </button>
+        </div>
       </form>
     </div>
   </div>
@@ -461,9 +466,14 @@
           <input type="text" id="pay-reference-input" class="form-control" placeholder="Ej: #SINPE-489201">
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block">
-          <i class="ti ti-check"></i> Registrar Pago
-        </button>
+        <div style="display:flex; gap:10px; margin-top:14px;">
+          <button type="button" class="btn btn-secondary btn-block" onclick="closeModal('modal-payment')">
+            <i class="ti ti-x"></i> Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary btn-block">
+            <i class="ti ti-check"></i> Registrar Pago
+          </button>
+        </div>
       </form>
     </div>
   </div>
@@ -511,9 +521,14 @@
           <input type="text" id="edit-order-notes" class="form-control" placeholder="Dedicatoria o empaque...">
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block">
-          <i class="ti ti-check"></i> Guardar Cambios
-        </button>
+        <div style="display:flex; gap:10px; margin-top:14px;">
+          <button type="button" class="btn btn-secondary btn-block" onclick="closeModal('modal-edit-order')">
+            <i class="ti ti-x"></i> Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary btn-block">
+            <i class="ti ti-check"></i> Guardar Cambios
+          </button>
+        </div>
       </form>
     </div>
   </div>
@@ -556,9 +571,14 @@
           <input type="text" id="adj-ref-input" class="form-control" placeholder="Ej: Factura #9821 Supermercado">
         </div>
 
-        <button type="submit" class="btn btn-primary btn-block">
-          <i class="ti ti-check"></i> Actualizar Inventario
-        </button>
+        <div style="display:flex; gap:10px; margin-top:14px;">
+          <button type="button" class="btn btn-secondary btn-block" onclick="closeModal('modal-adjust-stock')">
+            <i class="ti ti-x"></i> Cancelar
+          </button>
+          <button type="submit" class="btn btn-primary btn-block">
+            <i class="ti ti-check"></i> Actualizar Inventario
+          </button>
+        </div>
       </form>
     </div>
   </div>
@@ -617,9 +637,14 @@
           </div>
         </div>
 
-        <button type="submit" id="btn-save-ingredient" class="btn btn-primary btn-block">
-          <i class="ti ti-check"></i> Guardar Insumo
-        </button>
+        <div style="display:flex; gap:10px; margin-top:14px;">
+          <button type="button" class="btn btn-secondary btn-block" onclick="closeModal('modal-new-ingredient')">
+            <i class="ti ti-x"></i> Cancelar
+          </button>
+          <button type="submit" id="btn-save-ingredient" class="btn btn-primary btn-block">
+            <i class="ti ti-check"></i> Guardar Insumo
+          </button>
+        </div>
       </form>
     </div>
   </div>
@@ -701,9 +726,14 @@
           </button>
         </div>
 
-        <button type="submit" id="btn-save-product" class="btn btn-primary btn-block">
-          <i class="ti ti-check"></i> Registrar Producto y Receta
-        </button>
+        <div style="display:flex; gap:10px; margin-top:14px;">
+          <button type="button" class="btn btn-secondary btn-block" onclick="closeModal('modal-new-product')">
+            <i class="ti ti-x"></i> Cancelar
+          </button>
+          <button type="submit" id="btn-save-product" class="btn btn-primary btn-block">
+            <i class="ti ti-check"></i> Registrar Producto y Receta
+          </button>
+        </div>
       </form>
     </div>
   </div>
@@ -751,9 +781,14 @@
           <label class="form-label">Notas Especiales / Alergias</label>
           <input type="text" id="cust-notes-input" class="form-control" placeholder="Ej: Alérgica al gluten...">
         </div>
-        <button type="submit" id="btn-save-customer" class="btn btn-primary btn-block">
-          <i class="ti ti-check"></i> Guardar Cliente
-        </button>
+        <div style="display:flex; gap:10px; margin-top:14px;">
+          <button type="button" class="btn btn-secondary btn-block" onclick="closeModal('modal-new-customer')">
+            <i class="ti ti-x"></i> Cancelar
+          </button>
+          <button type="submit" id="btn-save-customer" class="btn btn-primary btn-block">
+            <i class="ti ti-check"></i> Guardar Cliente
+          </button>
+        </div>
       </form>
     </div>
   </div>
