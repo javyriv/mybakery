@@ -358,6 +358,12 @@ const API = {
     return snap.exists() ? snap.val() : {};
   },
 
+  async saveSettings(data) {
+    await ensureDatabaseReady();
+    await _fireDb.ref(`${ROOT}/settings`).update(data);
+    return { message: 'Configuraciones guardadas con éxito' };
+  },
+
   // ── Inventario ────────────────────────────────────────────────────
   async getInventory() {
     const ings = await DB.getList('ingredients');
