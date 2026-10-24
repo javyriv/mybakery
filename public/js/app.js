@@ -1571,7 +1571,97 @@ async function openTicketModal(orderId) {
   }
 }
 
-function shareTicketWhatsApp() {
+// --- Modal de Recibo / Ticket Helpers y Compartir ---
+async function getTicketCanvas() {
+  const ticket = document.getElementById('ticket-content');
+  if (!ticket) return null;
+  if (typeof html2canvas === 'undefined') {
+    console.warn('html2canvas no está cargado');
+    return null;
+  }
+  return await html2canvas(ticket, {
+    scale: 2,
+    backgroundColor: '#ffffff',
+    useCORS: true,
+    logging: false
+  });
+}
+
+async function downloadTicketImage() {
+  const order = AppState.activeTicketOrder;
+  const orderNum = order ? order.order_number : 'comprobante';
+  const btn = document.getElementById('btn-download-ticket');
+  const origHtml = btn ? btn.innerHTML : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader ti-spin"></i> Generando...';
+  }
+
+  try {
+    const canvas = await getTicketCanvas();
+    if (!canvas) {
+      UI.showToast('Generando comprobante, por favor intenta en unos segundos.', 'info');
+      return;
+    }
+    const link = document.createElement('a');
+    link.download = `Comprobante-${orderNum}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    UI.showToast('¡Comprobante descargado como imagen PNG!', 'success');
+  } catch (err) {
+    console.error('Error generando imagen:', err);
+    UI.showToast('Error al generar imagen del comprobante: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = origHtml;
+    }
+  }
+}
+
+function shareTicketEmail() {
+  const order = AppState.activeTicketOrder;
+  if (!order) return;
+
+  const s = AppState.settings || {};
+  let bName = s.bakery_name || 'Dulce Menta';
+  if (bName.includes('—')) bName = bName.split('—')[0].trim();
+  const bFooter = s.receipt_footer || '¡Gracias por endulzar tu día con nosotros! ✨';
+
+  let email = order.customer_email || '';
+  if (!email) {
+    email = prompt('Introduce el correo electrónico del cliente:', '') || '';
+  }
+
+  const itemsText = order.items.map(it => `  • ${it.quantity}x ${it.product_name} — ${UI.formatCurrency(it.subtotal)}`).join('\n');
+
+  const subject = `Comprobante de Pedido #${order.order_number} — ${bName}`;
+  const body = `Hola ${order.customer_name},
+
+Te enviamos el comprobante de tu pedido en ${bName}:
+
+================================================
+COMPROBANTE DE PEDIDO: #${order.order_number}
+================================================
+Fecha de Entrega: ${UI.formatDate(order.delivery_date)} ${order.delivery_time || ''}
+Modalidad: ${order.delivery_type === 'DOMICILIO' ? 'Envío a Domicilio' : 'Retiro en Tienda'}
+${order.delivery_address ? `Dirección de Entrega: ${order.delivery_address}\n` : ''}
+PRODUCTOS:
+${itemsText}
+
+TOTAL: ${UI.formatCurrency(order.total_amount)}
+ABONADO: ${UI.formatCurrency(order.total_paid)}
+SALDO PENDIENTE: ${UI.formatCurrency(order.pending_balance)}
+================================================
+
+${bFooter}
+
+${s.phone ? `Teléfono: ${s.phone}\n` : ''}${s.address ? `Dirección: ${s.address}\n` : ''}`;
+
+  window.open(`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+}
+
+async function shareTicketWhatsApp() {
   const order = AppState.activeTicketOrder;
   if (!order || !order.customer_phone) {
     UI.showToast('El cliente no tiene un teléfono registrado para WhatsApp', 'info');
@@ -1581,13 +1671,45 @@ function shareTicketWhatsApp() {
   const s = AppState.settings || {};
   let bName = s.bakery_name || 'Dulce Menta';
   if (bName.includes('—')) bName = bName.split('—')[0].trim();
+  const bFooter = s.receipt_footer || '¡Gracias por endulzar tu día con nosotros! ✨';
 
   const cleanPhone = order.customer_phone.replace(/[^0-9]/g, '');
-  const itemsText = order.items.map(it => `- ${it.quantity}x ${it.product_name} (${UI.formatCurrency(it.subtotal)})`).join('%0A');
+  const itemsText = order.items.map(it => `  • ${it.quantity}x ${it.product_name} (${UI.formatCurrency(it.subtotal)})`).join('\n');
 
-  const text = `Hola ${order.customer_name}, te enviamos el comprobante de tu pedido en *${bName}* 🥖%0A%0A*Pedido:* #${order.order_number}%0A*Fecha de Entrega:* ${UI.formatDate(order.delivery_date)} ${order.delivery_time || ''}%0A%0A*Detalle:*%0A${itemsText}%0A%0A*Total:* ${UI.formatCurrency(order.total_amount)}%0A*Abonado:* ${UI.formatCurrency(order.total_paid)}%0A*Saldo Pendiente:* ${UI.formatCurrency(order.pending_balance)}%0A%0A¡Muchas gracias por tu preferencia!`;
+  const text = `Hola ${order.customer_name}, te enviamos el comprobante de tu pedido en *${bName}* 🥖
 
-  window.open(`https://wa.me/${cleanPhone}?text=${text}`, '_blank');
+🧾 *Pedido:* #${order.order_number}
+📅 *Fecha de Entrega:* ${UI.formatDate(order.delivery_date)} ${order.delivery_time || ''}
+🛵 *Modalidad:* ${order.delivery_type === 'DOMICILIO' ? 'Envío a Domicilio' : 'Retiro en Tienda'}${order.delivery_address ? `\n📍 *Dirección:* ${order.delivery_address}` : ''}
+
+🛒 *Detalle de Productos:*
+${itemsText}
+
+💰 *TOTAL:* ${UI.formatCurrency(order.total_amount)}
+💵 *Abonado:* ${UI.formatCurrency(order.total_paid)}
+⚠️ *SALDO PENDIENTE:* ${UI.formatCurrency(order.pending_balance)}
+
+${bFooter}`;
+
+  // Intentar copiar la imagen del ticket al portapapeles para pegar con Ctrl+V en WhatsApp Web
+  try {
+    const canvas = await getTicketCanvas();
+    if (canvas && navigator.clipboard && window.ClipboardItem) {
+      canvas.toBlob(blob => {
+        if (blob) {
+          navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ]).then(() => {
+            UI.showToast('¡Imagen copiada al portapapeles! En WhatsApp puedes pegarla con Ctrl + V', 'success', 5000);
+          }).catch(() => {});
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('Clipboard image write no soportado en este navegador:', e);
+  }
+
+  window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank');
 }
 
 // ==================== MÓDULO DE COTIZACIONES & FICHA TÉCNICA DE RECETAS ====================
