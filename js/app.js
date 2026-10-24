@@ -1672,7 +1672,13 @@ ${bFooter}`;
 
       const templateParams = {
         to_email: email.trim(),
+        email: email.trim(),
+        user_email: email.trim(),
+        recipient: email.trim(),
+        client_email: email.trim(),
         to_name: order.customer_name,
+        user_name: order.customer_name,
+        customer_name: order.customer_name,
         order_number: order.order_number,
         delivery_date: `${UI.formatDate(order.delivery_date)} ${order.delivery_time || ''}`,
         delivery_type: order.delivery_type === 'DOMICILIO' ? 'Envío a Domicilio' : 'Retiro en Tienda',
