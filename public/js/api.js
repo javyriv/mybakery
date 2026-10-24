@@ -87,5 +87,6 @@ const API = {
 
   // Finanzas y Métricas
   getMetrics: (period = 'month') => API.request(`/metrics?period=${period}`),
-  getSettings: () => API.request('/settings')
+  getSettings: () => API.request('/settings'),
+  saveSettings: (data) => API.request('/settings', { method: 'POST', body: JSON.stringify(data) })
 };

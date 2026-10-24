@@ -1,4 +1,4 @@
-﻿/* ==========================================================================
+/* ==========================================================================
    DULCE MENTA — SISTEMA DE GESTIÓN PARA REPOSTERÍA & PANADERÍA ARTESANAL
    Mobile-First Custom Design System (Menta, Turquesa Pastel & Tonos Crema)
    ========================================================================== */
@@ -776,5 +776,11 @@ textarea.form-control {
 @media (max-width: 767px) {
   .desktop-nav {
     display: none;
+  }
+}
+
+@media (min-width: 640px) {
+  #settings-grid-layout {
+    grid-template-columns: 1.15fr 0.85fr !important;
   }
 }

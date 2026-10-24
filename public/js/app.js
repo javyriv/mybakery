@@ -13,17 +13,16 @@ const AppState = {
   chartInstance: null,
   activeTicketOrder: null,
   currentUser: null,
-  users: []
+  users: [],
+  settings: {}
 };
 
 // Inicialización de la aplicación al cargar el DOM
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     const settings = await API.getSettings();
-    if (settings.currency_symbol) UI.currencySymbol = settings.currency_symbol;
-    if (settings.bakery_name) {
-      document.getElementById('header-bakery-name').textContent = settings.bakery_name.split('—')[0].trim();
-    }
+    AppState.settings = settings || {};
+    applySettingsToUI();
   } catch (e) {
     console.warn('Ajustes por defecto cargados.');
   }
@@ -1527,12 +1526,25 @@ async function openTicketModal(orderId) {
       </div>
     `).join('');
 
+    const s = AppState.settings || {};
+    let bName = s.bakery_name || 'DULCE MENTA';
+    let bSub = s.bakery_subtitle || 'Panadería & Repostería Artesanal';
+    if (!s.bakery_subtitle && bName.includes('—')) {
+      const parts = bName.split('—');
+      bName = parts[0].trim();
+      bSub = parts[1].trim();
+    }
+    const bPhone = s.phone || '+506 8888-1234';
+    const bAddress = s.address || '';
+    const bFooter = s.receipt_footer || '¡Gracias por endulzar tu día con nosotros! ✨';
+
     document.getElementById('ticket-content').innerHTML = `
       <div class="receipt-header">
-        <h3>🥖 DULCE MENTA</h3>
-        <p>Panadería & Repostería Artesanal</p>
-        <p>Tel: +506 8888-1234</p>
-        <p><strong>Pedido: #${order.order_number}</strong></p>
+        <h3>🥖 ${bName.toUpperCase()}</h3>
+        <p>${bSub}</p>
+        <p>Tel: ${bPhone}</p>
+        ${bAddress ? `<p style="font-size:11px; color:#64748b; margin-top:2px;">${bAddress}</p>` : ''}
+        <p style="margin-top:4px;"><strong>Pedido: #${order.order_number}</strong></p>
       </div>
       <div class="receipt-row"><strong>Cliente:</strong> <span>${order.customer_name}</span></div>
       <div class="receipt-row"><strong>Entrega:</strong> <span>${UI.formatDate(order.delivery_date)} ${order.delivery_time || ''}</span></div>
@@ -1550,7 +1562,7 @@ async function openTicketModal(orderId) {
         <span>${UI.formatCurrency(order.pending_balance)}</span>
       </div>
       ${order.notes ? `<p style="margin-top:8px; font-size:11px; font-style:italic;">Nota: ${order.notes}</p>` : ''}
-      <p style="text-align:center; margin-top:12px; font-size:11px;">¡Gracias por endulzar tu día con nosotros! ✨</p>
+      <p style="text-align:center; margin-top:12px; font-size:11px;">${bFooter}</p>
     `;
 
     UI.openModal('modal-ticket');
@@ -1566,10 +1578,14 @@ function shareTicketWhatsApp() {
     return;
   }
 
+  const s = AppState.settings || {};
+  let bName = s.bakery_name || 'Dulce Menta';
+  if (bName.includes('—')) bName = bName.split('—')[0].trim();
+
   const cleanPhone = order.customer_phone.replace(/[^0-9]/g, '');
   const itemsText = order.items.map(it => `- ${it.quantity}x ${it.product_name} (${UI.formatCurrency(it.subtotal)})`).join('%0A');
 
-  const text = `Hola ${order.customer_name}, te enviamos el comprobante de tu pedido en *Dulce Menta* 🥖%0A%0A*Pedido:* #${order.order_number}%0A*Fecha de Entrega:* ${UI.formatDate(order.delivery_date)} ${order.delivery_time || ''}%0A%0A*Detalle:*%0A${itemsText}%0A%0A*Total:* ${UI.formatCurrency(order.total_amount)}%0A*Abonado:* ${UI.formatCurrency(order.total_paid)}%0A*Saldo Pendiente:* ${UI.formatCurrency(order.pending_balance)}%0A%0A¡Muchas gracias por tu preferencia!`;
+  const text = `Hola ${order.customer_name}, te enviamos el comprobante de tu pedido en *${bName}* 🥖%0A%0A*Pedido:* #${order.order_number}%0A*Fecha de Entrega:* ${UI.formatDate(order.delivery_date)} ${order.delivery_time || ''}%0A%0A*Detalle:*%0A${itemsText}%0A%0A*Total:* ${UI.formatCurrency(order.total_amount)}%0A*Abonado:* ${UI.formatCurrency(order.total_paid)}%0A*Saldo Pendiente:* ${UI.formatCurrency(order.pending_balance)}%0A%0A¡Muchas gracias por tu preferencia!`;
 
   window.open(`https://wa.me/${cleanPhone}?text=${text}`, '_blank');
 }
@@ -1815,7 +1831,11 @@ function copyQuotationWhatsApp() {
     weightNote = `\n⚖️ Peso crudo estimado: ${rawWeight} ${rawUnit} por pieza (Total lote: ${wText})`;
   }
 
-  const text = `🥖 *COTIZACIÓN — DULCE MENTA BAKERY*
+  const s = AppState.settings || {};
+  let bName = s.bakery_name || 'Dulce Menta';
+  if (bName.includes('—')) bName = bName.split('—')[0].trim();
+
+  const text = `🥖 *COTIZACIÓN — ${bName.toUpperCase()}*
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🧁 *Producto:* ${p.name}
 📦 *Cantidad:* ${qty} ${p.yield_unit || 'unidades'}${weightNote}
@@ -1823,7 +1843,7 @@ function copyQuotationWhatsApp() {
 💵 *TOTAL COTIZADO:* ${UI.formatCurrency(totalRevenue)}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✨ *Elaborado con materia prima 100% artesanal.*
-📲 Para confirmar tu pedido, respóndenos a este mensaje. ¡Gracias por preferir Dulce Menta!`;
+📲 Para confirmar tu pedido, respóndenos a este mensaje. ¡Gracias por preferir ${bName}!`;
 
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(() => {
@@ -2118,3 +2138,127 @@ async function confirmDeleteUser(userId, userName) {
     UI.showToast(err.message, 'error');
   }
 }
+
+// ==================== CONFIGURACIÓN DEL NEGOCIO & COMPROBANTES ====================
+function applySettingsToUI() {
+  const s = AppState.settings || {};
+  if (s.currency_symbol) UI.currencySymbol = s.currency_symbol;
+
+  let name = s.bakery_name || 'Dulce Menta';
+  let subtitle = s.bakery_subtitle || 'Panadería & Repostería';
+
+  if (!s.bakery_subtitle && name.includes('—')) {
+    const parts = name.split('—');
+    name = parts[0].trim();
+    subtitle = parts[1].trim();
+  }
+
+  const nameEl = document.getElementById('header-bakery-name');
+  if (nameEl) nameEl.textContent = name;
+
+  const subEl = document.getElementById('header-bakery-subtitle');
+  if (subEl) subEl.textContent = subtitle;
+
+  document.title = `${name} — Sistema de Gestión`;
+}
+
+function openSettingsModal() {
+  const s = AppState.settings || {};
+  let name = s.bakery_name || 'Dulce Menta';
+  let subtitle = s.bakery_subtitle || 'Panadería & Repostería Artesanal';
+
+  if (!s.bakery_subtitle && name.includes('—')) {
+    const parts = name.split('—');
+    name = parts[0].trim();
+    subtitle = parts[1].trim();
+  }
+
+  const nameInput = document.getElementById('setting-bakery-name');
+  const subInput = document.getElementById('setting-bakery-subtitle');
+  const phoneInput = document.getElementById('setting-phone');
+  const waInput = document.getElementById('setting-whatsapp');
+  const addrInput = document.getElementById('setting-address');
+  const currInput = document.getElementById('setting-currency');
+  const footerInput = document.getElementById('setting-receipt-footer');
+
+  if (nameInput) nameInput.value = name;
+  if (subInput) subInput.value = subtitle;
+  if (phoneInput) phoneInput.value = s.phone || '+506 8888-1234';
+  if (waInput) waInput.value = s.whatsapp || '50688881234';
+  if (addrInput) addrInput.value = s.address || '';
+  if (currInput) currInput.value = s.currency_symbol || '₡';
+  if (footerInput) footerInput.value = s.receipt_footer || '¡Gracias por endulzar tu día con nosotros! ✨';
+
+  updateSettingsPreview();
+  UI.openModal('modal-settings');
+}
+
+function updateSettingsPreview() {
+  const name = document.getElementById('setting-bakery-name')?.value || 'Dulce Menta';
+  const subtitle = document.getElementById('setting-bakery-subtitle')?.value || 'Panadería & Repostería Artesanal';
+  const phone = document.getElementById('setting-phone')?.value || '+506 8888-1234';
+  const address = document.getElementById('setting-address')?.value || '';
+  const currency = document.getElementById('setting-currency')?.value || '₡';
+  const footer = document.getElementById('setting-receipt-footer')?.value || '¡Gracias por endulzar tu día con nosotros! ✨';
+
+  const previewEl = document.getElementById('ticket-live-preview');
+  if (!previewEl) return;
+
+  previewEl.innerHTML = `
+    <div class="receipt-header" style="margin-bottom:8px; padding-bottom:8px;">
+      <h3 style="margin-bottom:2px; font-size:14px;">🥖 ${name.toUpperCase()}</h3>
+      <p style="margin:2px 0; font-size:12px;">${subtitle}</p>
+      <p style="margin:2px 0; font-size:12px;">Tel: ${phone}</p>
+      ${address ? `<p style="font-size:10px; color:#64748b; margin:2px 0;">${address}</p>` : ''}
+      <p style="margin-top:4px; font-size:12px;"><strong>Pedido: #PED-2026-0023</strong></p>
+    </div>
+    <div class="receipt-row" style="font-size:11px;"><span>Cliente:</span> <span>María Rodríguez</span></div>
+    <div class="receipt-row" style="font-size:11px;"><span>Entrega:</span> <span>24/10/2026 3:00 PM</span></div>
+    <hr style="border:none; border-top:1px dashed #cbd5e1; margin:6px 0;">
+    <div class="receipt-row" style="font-size:11px;"><span>1x Queque de Zanahoria</span> <span>${currency}14,000</span></div>
+    <div class="receipt-row" style="font-size:11px;"><span>2x Croissant de Mantequilla</span> <span>${currency}3,000</span></div>
+    <div class="receipt-row" style="font-size:12px; font-weight:700; margin-top:4px; border-top:1px dashed #cbd5e1; padding-top:4px;">
+      <span>TOTAL:</span>
+      <span>${currency}17,000</span>
+    </div>
+    <p style="text-align:center; font-size:10px; color:#64748b; margin-top:10px; border-top:1px dashed #cbd5e1; padding-top:6px;">${footer}</p>
+  `;
+}
+
+async function submitSettings(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-save-settings');
+  const originalHtml = btn ? btn.innerHTML : '';
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ti ti-loader ti-spin"></i> Guardando...';
+  }
+
+  const payload = {
+    bakery_name: document.getElementById('setting-bakery-name').value.trim(),
+    bakery_subtitle: document.getElementById('setting-bakery-subtitle').value.trim(),
+    phone: document.getElementById('setting-phone').value.trim(),
+    whatsapp: document.getElementById('setting-whatsapp').value.trim(),
+    address: document.getElementById('setting-address').value.trim(),
+    currency_symbol: document.getElementById('setting-currency').value.trim() || '₡',
+    receipt_footer: document.getElementById('setting-receipt-footer').value.trim()
+  };
+
+  try {
+    await API.saveSettings(payload);
+    AppState.settings = { ...AppState.settings, ...payload };
+    applySettingsToUI();
+    UI.closeModal('modal-settings');
+    UI.showToast('¡Configuración guardada exitosamente!', 'success');
+  } catch (err) {
+    console.error('Error guardando ajustes:', err);
+    UI.showToast('Error al guardar ajustes: ' + err.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  }
+}
+

@@ -6,11 +6,13 @@ function seedDatabase() {
 
     // 1. Configuraciones
     const settings = [
-        ['bakery_name', 'Dulce Menta — Panadería & Repostería Artesanal'],
+        ['bakery_name', 'Dulce Menta'],
+        ['bakery_subtitle', 'Panadería & Repostería Artesanal'],
         ['currency_symbol', '₡'],
         ['phone', '+506 8888-1234'],
         ['whatsapp', '50688881234'],
         ['address', 'Barrio Escalante, 100m Este del Parque, San José, Costa Rica'],
+        ['receipt_footer', '¡Muchas gracias por su preferencia!'],
         ['low_stock_alerts_enabled', 'true']
     ];
 
