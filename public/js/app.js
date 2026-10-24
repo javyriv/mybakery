@@ -1619,7 +1619,7 @@ async function downloadTicketImage() {
   }
 }
 
-function shareTicketEmail() {
+async function shareTicketEmail() {
   const order = AppState.activeTicketOrder;
   if (!order) return;
 
@@ -1630,34 +1630,70 @@ function shareTicketEmail() {
 
   let email = order.customer_email || '';
   if (!email) {
-    email = prompt('Introduce el correo electrónico del cliente:', '') || '';
+    email = prompt('Introduce el correo electrónico del cliente para enviar el comprobante:', '') || '';
+    if (!email) return;
   }
 
+  const btn = document.getElementById('btn-share-email');
+  const origHtml = btn ? btn.innerHTML : '';
+
+  // 1. Envío automático por EmailJS si está configurado
+  if (s.emailjs_service_id && s.emailjs_template_id && s.emailjs_public_key && typeof emailjs !== 'undefined') {
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="ti ti-loader ti-spin"></i> Enviando...';
+    }
+
+    try {
+      const canvas = await getTicketCanvas();
+      const ticketBase64 = canvas ? canvas.toDataURL('image/png') : '';
+      const itemsText = order.items.map(it => `• ${it.quantity}x ${it.product_name} — ${UI.formatCurrency(it.subtotal)}`).join('\n');
+
+      const templateParams = {
+        to_email: email,
+        to_name: order.customer_name,
+        order_number: order.order_number,
+        delivery_date: `${UI.formatDate(order.delivery_date)} ${order.delivery_time || ''}`,
+        delivery_type: order.delivery_type === 'DOMICILIO' ? 'Envío a Domicilio' : 'Retiro en Tienda',
+        delivery_address: order.delivery_address || 'Retiro en local',
+        items_summary: itemsText,
+        total_amount: UI.formatCurrency(order.total_amount),
+        total_paid: UI.formatCurrency(order.total_paid),
+        pending_balance: UI.formatCurrency(order.pending_balance),
+        bakery_name: bName,
+        footer_message: bFooter,
+        ticket_image: ticketBase64
+      };
+
+      await emailjs.send(s.emailjs_service_id, s.emailjs_template_id, templateParams, s.emailjs_public_key);
+      UI.showToast(`¡Comprobante enviado automáticamente a ${email}!`, 'success', 5000);
+      return;
+    } catch (err) {
+      console.error('Error enviando con EmailJS:', err);
+      UI.showToast('Error al enviar correo con EmailJS: ' + (err.text || err.message), 'warning');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      }
+    }
+  }
+
+  // 2. Si aún no está configurado EmailJS, avisar y ofrecer configurarlo
+  const configNow = confirm(
+    `Para que el comprobante con la imagen se envíe 100% automático sin abrir programas, ingresa tus claves de EmailJS en Ajustes.\n\n¿Deseas abrir Ajustes ahora para configurarlo?\n(Si presionas Cancelar, se abrirá tu programa de correo tradicional).`
+  );
+
+  if (configNow) {
+    UI.closeModal('modal-ticket');
+    openSettingsModal();
+    return;
+  }
+
+  // Fallback con mailto:
   const itemsText = order.items.map(it => `  • ${it.quantity}x ${it.product_name} — ${UI.formatCurrency(it.subtotal)}`).join('\n');
-
   const subject = `Comprobante de Pedido #${order.order_number} — ${bName}`;
-  const body = `Hola ${order.customer_name},
-
-Te enviamos el comprobante de tu pedido en ${bName}:
-
-================================================
-COMPROBANTE DE PEDIDO: #${order.order_number}
-================================================
-Fecha de Entrega: ${UI.formatDate(order.delivery_date)} ${order.delivery_time || ''}
-Modalidad: ${order.delivery_type === 'DOMICILIO' ? 'Envío a Domicilio' : 'Retiro en Tienda'}
-${order.delivery_address ? `Dirección de Entrega: ${order.delivery_address}\n` : ''}
-PRODUCTOS:
-${itemsText}
-
-TOTAL: ${UI.formatCurrency(order.total_amount)}
-ABONADO: ${UI.formatCurrency(order.total_paid)}
-SALDO PENDIENTE: ${UI.formatCurrency(order.pending_balance)}
-================================================
-
-${bFooter}
-
-${s.phone ? `Teléfono: ${s.phone}\n` : ''}${s.address ? `Dirección: ${s.address}\n` : ''}`;
-
+  const body = `Hola ${order.customer_name},\n\nTe enviamos el comprobante de tu pedido en ${bName}:\n\nPedido #${order.order_number}\nFecha de Entrega: ${UI.formatDate(order.delivery_date)} ${order.delivery_time || ''}\nTotal: ${UI.formatCurrency(order.total_amount)}\nSaldo: ${UI.formatCurrency(order.pending_balance)}\n\n${itemsText}\n\n${bFooter}`;
   window.open(`mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
 }
 
@@ -1691,22 +1727,41 @@ ${itemsText}
 
 ${bFooter}`;
 
-  // Intentar copiar la imagen del ticket al portapapeles para pegar con Ctrl+V en WhatsApp Web
+  // Intentar compartir automáticamente el archivo de imagen con Web Share API (Móviles Android, iPhone, Windows 11 App)
   try {
     const canvas = await getTicketCanvas();
-    if (canvas && navigator.clipboard && window.ClipboardItem) {
-      canvas.toBlob(blob => {
-        if (blob) {
-          navigator.clipboard.write([
-            new ClipboardItem({ 'image/png': blob })
-          ]).then(() => {
-            UI.showToast('¡Imagen copiada al portapapeles! En WhatsApp puedes pegarla con Ctrl + V', 'success', 5000);
-          }).catch(() => {});
+    if (canvas) {
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      if (blob) {
+        const imageFile = new File([blob], `Comprobante-${order.order_number}.png`, { type: 'image/png' });
+        if (navigator.canShare && navigator.canShare({ files: [imageFile] })) {
+          try {
+            await navigator.share({
+              files: [imageFile],
+              title: `Comprobante de Pedido #${order.order_number}`,
+              text: text
+            });
+            UI.showToast('¡Comprobante compartido con la imagen adjunta!', 'success');
+            return;
+          } catch (shareErr) {
+            if (shareErr.name === 'AbortError') return; // Cancelado por usuario
+          }
         }
-      });
+
+        // Si no soporta Web Share API con archivos (Escritorio PC):
+        // Copiamos la imagen al portapapeles para pegar con Ctrl+V
+        if (navigator.clipboard && window.ClipboardItem) {
+          try {
+            await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+            UI.showToast('¡Imagen copiada al portapapeles! Al abrir WhatsApp presiona Ctrl + V para enviarla', 'success', 5000);
+          } catch (clipErr) {
+            console.log('Clipboard write falló:', clipErr);
+          }
+        }
+      }
     }
   } catch (e) {
-    console.warn('Clipboard image write no soportado en este navegador:', e);
+    console.warn('Error al procesar imagen para compartir:', e);
   }
 
   window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`, '_blank');
@@ -2302,6 +2357,9 @@ function openSettingsModal() {
   const addrInput = document.getElementById('setting-address');
   const currInput = document.getElementById('setting-currency');
   const footerInput = document.getElementById('setting-receipt-footer');
+  const emailServiceInput = document.getElementById('setting-emailjs-service');
+  const emailTemplateInput = document.getElementById('setting-emailjs-template');
+  const emailKeyInput = document.getElementById('setting-emailjs-key');
 
   if (nameInput) nameInput.value = name;
   if (subInput) subInput.value = subtitle;
@@ -2310,6 +2368,9 @@ function openSettingsModal() {
   if (addrInput) addrInput.value = s.address || '';
   if (currInput) currInput.value = s.currency_symbol || '₡';
   if (footerInput) footerInput.value = s.receipt_footer || '¡Gracias por endulzar tu día con nosotros! ✨';
+  if (emailServiceInput) emailServiceInput.value = s.emailjs_service_id || '';
+  if (emailTemplateInput) emailTemplateInput.value = s.emailjs_template_id || '';
+  if (emailKeyInput) emailKeyInput.value = s.emailjs_public_key || '';
 
   updateSettingsPreview();
   UI.openModal('modal-settings');
@@ -2364,7 +2425,10 @@ async function submitSettings(e) {
     whatsapp: document.getElementById('setting-whatsapp').value.trim(),
     address: document.getElementById('setting-address').value.trim(),
     currency_symbol: document.getElementById('setting-currency').value.trim() || '₡',
-    receipt_footer: document.getElementById('setting-receipt-footer').value.trim()
+    receipt_footer: document.getElementById('setting-receipt-footer').value.trim(),
+    emailjs_service_id: document.getElementById('setting-emailjs-service')?.value.trim() || '',
+    emailjs_template_id: document.getElementById('setting-emailjs-template')?.value.trim() || '',
+    emailjs_public_key: document.getElementById('setting-emailjs-key')?.value.trim() || ''
   };
 
   try {
