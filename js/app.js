@@ -1645,12 +1645,33 @@ async function shareTicketEmail() {
     }
 
     try {
-      const canvas = await getTicketCanvas();
-      const ticketBase64 = canvas ? canvas.toDataURL('image/png') : '';
-      const itemsText = order.items.map(it => `• ${it.quantity}x ${it.product_name} — ${UI.formatCurrency(it.subtotal)}`).join('\n');
+      const itemsText = order.items.map(it => `  • ${it.quantity}x ${it.product_name} (${UI.formatCurrency(it.subtotal)})`).join('\n');
+      const paymentsText = (order.payments || []).map(p => `Abono (${p.payment_method}): -${UI.formatCurrency(p.amount)}`).join('\n');
+
+      const receiptFormatted = `🥖 ${bName.toUpperCase()}
+${s.bakery_subtitle || 'Panadería & Repostería Artesanal'}
+${s.phone ? `Tel: ${s.phone}` : ''}
+${s.address ? s.address : ''}
+
+==================================================
+COMPROBANTE DE PEDIDO: #${order.order_number}
+==================================================
+Cliente: ${order.customer_name}
+Fecha de Entrega: ${UI.formatDate(order.delivery_date)} ${order.delivery_time || ''}
+Modalidad: ${order.delivery_type === 'DOMICILIO' ? 'Envío a Domicilio' : 'Retiro en Tienda'}
+${order.delivery_address ? `Dirección de Entrega: ${order.delivery_address}\n` : ''}
+--------------------------------------------------
+PRODUCTOS:
+${itemsText}
+--------------------------------------------------
+TOTAL: ${UI.formatCurrency(order.total_amount)}
+${paymentsText ? paymentsText + '\n' : ''}SALDO PENDIENTE: ${UI.formatCurrency(order.pending_balance)}
+==================================================
+
+${bFooter}`;
 
       const templateParams = {
-        to_email: email,
+        to_email: email.trim(),
         to_name: order.customer_name,
         order_number: order.order_number,
         delivery_date: `${UI.formatDate(order.delivery_date)} ${order.delivery_time || ''}`,
@@ -1662,15 +1683,23 @@ async function shareTicketEmail() {
         pending_balance: UI.formatCurrency(order.pending_balance),
         bakery_name: bName,
         footer_message: bFooter,
-        ticket_image: ticketBase64
+        message: receiptFormatted
       };
 
-      await emailjs.send(s.emailjs_service_id, s.emailjs_template_id, templateParams, s.emailjs_public_key);
-      UI.showToast(`¡Comprobante enviado automáticamente a ${email}!`, 'success', 5000);
+      await emailjs.send(
+        s.emailjs_service_id.trim(),
+        s.emailjs_template_id.trim(),
+        templateParams,
+        s.emailjs_public_key.trim()
+      );
+
+      UI.showToast(`¡Comprobante enviado exitosamente a ${email}!`, 'success', 5000);
       return;
     } catch (err) {
       console.error('Error enviando con EmailJS:', err);
-      UI.showToast('Error al enviar correo con EmailJS: ' + (err.text || err.message), 'warning');
+      const errMsg = err?.text || err?.message || JSON.stringify(err);
+      UI.showToast('Error al enviar con EmailJS: ' + errMsg, 'error', 7000);
+      return; // Importante: retornar aquí para evitar mostrar el pop-up de credenciales faltantes
     } finally {
       if (btn) {
         btn.disabled = false;
