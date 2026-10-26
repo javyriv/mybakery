@@ -259,8 +259,8 @@ function renderProductsList() {
       <div class="item-card-details">
         <div class="detail-pill">Costo Lote: <strong>${UI.formatCurrency(p.total_recipe_cost)}</strong></div>
         <div class="detail-pill" style="border-color:var(--primary-300); background:var(--primary-50);">Costo/Unidad: <strong>${UI.formatCurrency(p.unit_cost)}</strong></div>
-        <div class="detail-pill">Ganancia: <strong>${UI.formatCurrency(p.gross_profit)}</strong></div>
-        <div class="detail-pill">Margen: <strong>${p.profit_margin_pct}%</strong></div>
+        <div class="detail-pill" style="${p.gross_profit < 0 ? 'color:var(--danger);' : ''}">Ganancia/Unid: <strong>${UI.formatCurrency(p.gross_profit)}</strong></div>
+        <div class="detail-pill" style="${p.profit_margin_pct < 0 ? 'color:var(--danger);' : ''}">Margen: <strong>${p.profit_margin_pct}%</strong></div>
         <div class="detail-pill">Ingredientes: <strong>${p.ingredients_count}</strong></div>
       </div>
       <div class="item-card-actions">
@@ -325,6 +325,7 @@ async function openEditProductModal(productId) {
     } else {
       addRecipeItemRow();
     }
+    updateRecipeCostPreview();
 
     UI.openModal('modal-new-product');
   } catch (err) {
@@ -369,6 +370,7 @@ async function duplicateRecipe(productId) {
     } else {
       addRecipeItemRow();
     }
+    updateRecipeCostPreview();
 
     UI.openModal('modal-new-product');
     UI.showToast(`Receta de '${product.name}' cargada para duplicar. Ajusta el nombre o ingredientes y guárdala.`, 'info', 4000);
@@ -1371,6 +1373,7 @@ function openNewProductModal() {
   AppState.recipeItemsBuilder = [];
   document.getElementById('recipe-items-builder').innerHTML = '';
   addRecipeItemRow();
+  updateRecipeCostPreview();
   UI.openModal('modal-new-product');
 }
 
@@ -1393,6 +1396,69 @@ function updateBatchWeightPreview() {
   }
 }
 
+function updateRecipeCostPreview() {
+  const previewEl = document.getElementById('recipe-live-summary');
+  if (!previewEl) return;
+
+  const yieldQty = parseFloat(document.getElementById('prod-yield-qty-input')?.value) || 1;
+  const yieldUnit = document.getElementById('prod-yield-unit-input')?.value || 'unidad';
+  const salePrice = parseFloat(document.getElementById('prod-price-input')?.value) || 0;
+
+  const rows = document.querySelectorAll('#recipe-items-builder .recipe-item-row');
+  let totalBatchCost = 0;
+  let count = 0;
+
+  rows.forEach(r => {
+    const sel = r.querySelector('select');
+    const input = r.querySelector('input');
+    const ingId = parseInt(sel?.value);
+    const qty = parseFloat(input?.value) || 0;
+    if (ingId && qty > 0) {
+      count++;
+      const ing = (AppState.ingredients || []).find(i => i.id === ingId);
+      if (ing) {
+        totalBatchCost += qty * (ing.cost_per_unit || 0);
+      }
+    }
+  });
+
+  if (count === 0 && totalBatchCost === 0) {
+    previewEl.style.display = 'none';
+    return;
+  }
+
+  const effectiveYield = yieldQty > 0 ? yieldQty : 1;
+  const unitCost = totalBatchCost / effectiveYield;
+  const unitProfit = salePrice - unitCost;
+  const marginPct = salePrice > 0 ? ((unitProfit / salePrice) * 100).toFixed(1) : '0';
+
+  previewEl.style.display = 'block';
+  previewEl.innerHTML = `
+    <div style="font-weight:700; color:var(--primary-950); margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
+      <span><i class="ti ti-calculator"></i> Estimación de Costos & Margen:</span>
+      <span style="font-size:11px; background:var(--primary-100); color:var(--primary-900); padding:2px 8px; border-radius:8px; font-weight:600;">Base: ${effectiveYield} ${yieldUnit}</span>
+    </div>
+    <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; text-align:center;">
+      <div style="background:#fff; padding:6px; border-radius:var(--radius-sm); border:1px solid var(--cream-200);">
+        <div style="font-size:10px; color:var(--cream-600); font-weight:600;">Costo Lote</div>
+        <strong style="font-size:12px; color:var(--danger);">${UI.formatCurrency(totalBatchCost)}</strong>
+      </div>
+      <div style="background:var(--primary-50); padding:6px; border-radius:var(--radius-sm); border:1px solid var(--primary-200);">
+        <div style="font-size:10px; color:var(--primary-800); font-weight:700;">Costo / Unidad (÷ ${effectiveYield})</div>
+        <strong style="font-size:12px; color:var(--primary-900);">${UI.formatCurrency(unitCost)}</strong>
+      </div>
+      <div style="background:#fff; padding:6px; border-radius:var(--radius-sm); border:1px solid var(--cream-200);">
+        <div style="font-size:10px; color:var(--cream-600); font-weight:600;">Ganancia / Unid.</div>
+        <strong style="font-size:12px; color:${unitProfit >= 0 ? 'var(--primary-800)' : 'var(--danger)'};">${UI.formatCurrency(unitProfit)}</strong>
+      </div>
+      <div style="background:#fff; padding:6px; border-radius:var(--radius-sm); border:1px solid var(--cream-200);">
+        <div style="font-size:10px; color:var(--cream-600); font-weight:600;">Margen</div>
+        <strong style="font-size:12px; color:${unitProfit >= 0 ? 'var(--primary-800)' : 'var(--danger)'};">${marginPct}%</strong>
+      </div>
+    </div>
+  `;
+}
+
 function addRecipeItemRow(preselectedIngredientId = null, preselectedQty = 0.1) {
   const container = document.getElementById('recipe-items-builder');
   const index = AppState.recipeItemsBuilder.length;
@@ -1407,13 +1473,14 @@ function addRecipeItemRow(preselectedIngredientId = null, preselectedQty = 0.1) 
   ).join('');
 
   row.innerHTML = `
-    <select class="form-control" style="min-height:40px; font-size:13px;">${options}</select>
-    <input type="number" class="form-control" style="min-height:40px; font-size:13px;" placeholder="Cant." step="any" value="${preselectedQty}">
-    <button type="button" class="btn btn-danger btn-sm" style="min-height:40px; width:36px; padding:0;" onclick="document.getElementById('recipe-row-${index}').remove()">&times;</button>
+    <select class="form-control" style="min-height:40px; font-size:13px;" onchange="updateRecipeCostPreview()">${options}</select>
+    <input type="number" class="form-control" style="min-height:40px; font-size:13px;" placeholder="Cant." step="any" value="${preselectedQty}" oninput="updateRecipeCostPreview()">
+    <button type="button" class="btn btn-danger btn-sm" style="min-height:40px; width:36px; padding:0;" onclick="document.getElementById('recipe-row-${index}').remove(); updateRecipeCostPreview();">&times;</button>
   `;
 
   container.appendChild(row);
   AppState.recipeItemsBuilder.push(row);
+  updateRecipeCostPreview();
 }
 
 async function submitNewProduct(e) {
@@ -1838,15 +1905,15 @@ async function openRecipeQuotationModal(productId) {
           </div>
         </div>
 
-        <div class="stats-grid" style="grid-template-columns: repeat(3, 1fr); gap:8px;">
+        <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); gap:8px;">
           <div style="background:#fff; padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--cream-200);">
             <div style="font-size:11px; color:var(--cream-600); font-weight:600;">Rendimiento Base</div>
             <div style="font-size:15px; font-weight:800; color:var(--primary-900);">${yieldQty} ${product.yield_unit}</div>
           </div>
           <div style="background:#fff; padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--cream-200);">
-            <div style="font-size:11px; color:var(--cream-600); font-weight:600;">Peso Neto Sin Hornear</div>
+            <div style="font-size:11px; color:var(--cream-600); font-weight:600;">Masa Cruda / Unid.</div>
             <div style="font-size:15px; font-weight:800; color:var(--primary-900);">
-              ${rawWeight > 0 ? `${rawWeight} ${rawUnit} <span style="font-size:11px; font-weight:400; color:var(--cream-500);">/unidad</span>` : 'No def.'}
+              ${rawWeight > 0 ? `${rawWeight} ${rawUnit}` : 'No def.'}
             </div>
             ${totalRaw > 0 ? `<div style="font-size:10px; color:var(--cream-600);">Lote base: ${totalRaw} ${rawUnit}</div>` : ''}
           </div>
@@ -1854,6 +1921,13 @@ async function openRecipeQuotationModal(productId) {
             <div style="font-size:11px; color:var(--cream-600); font-weight:600;">Costo Insumos Unitario</div>
             <div style="font-size:15px; font-weight:800; color:var(--danger);">${UI.formatCurrency(product.unit_cost)}</div>
             <div style="font-size:10px; color:var(--cream-600);">Lote completo: ${UI.formatCurrency(product.total_recipe_cost)}</div>
+          </div>
+          <div style="background:#fff; padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--cream-200);">
+            <div style="font-size:11px; color:var(--cream-600); font-weight:600;">Ganancia & Margen Unit.</div>
+            <div style="font-size:15px; font-weight:800; color:${product.gross_profit >= 0 ? 'var(--primary-800)' : 'var(--danger)'};">
+              ${UI.formatCurrency(product.gross_profit)} <span style="font-size:11px; font-weight:600;">(${product.profit_margin_pct}%)</span>
+            </div>
+            <div style="font-size:10px; color:var(--cream-600);">Ganancia Lote: ${UI.formatCurrency(product.batch_gross_profit !== undefined ? product.batch_gross_profit : (product.gross_profit * yieldQty))}</div>
           </div>
         </div>
       </div>

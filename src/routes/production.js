@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const { query, get, run, transaction } = require('../database/db');
 
@@ -71,8 +71,8 @@ router.post('/project', (req, res) => {
             };
         });
 
-        // Ingreso proyectado por venta
-        const expectedRevenue = Math.round(((qty / yieldQty) * product.sale_price) * 100) / 100;
+        // Ingreso proyectado por venta (unidades a producir * precio de venta unitario)
+        const expectedRevenue = Math.round((qty * product.sale_price) * 100) / 100;
         const expectedGrossProfit = Math.round((expectedRevenue - totalProductionCost) * 100) / 100;
         const profitMarginPct = expectedRevenue > 0 
             ? Math.round(((expectedGrossProfit / expectedRevenue) * 100) * 10) / 10 
@@ -180,7 +180,7 @@ router.post('/execute', (req, res) => {
                 ]);
             }
 
-            const revenue = (qty / yieldQty) * product.sale_price;
+            const revenue = Math.round((qty * product.sale_price) * 100) / 100;
             const prodRes = run(`
                 INSERT INTO productions (product_id, quantity, total_cost, expected_revenue, notes)
                 VALUES (?, ?, ?, ?, ?)

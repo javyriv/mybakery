@@ -71,19 +71,22 @@ router.get('/', (req, res) => {
 
         // Calcular costo por unidad producida y margen de ganancia
         const enriched = products.map(p => {
-            const unitCost = p.yield_quantity > 0 ? (p.total_recipe_cost / p.yield_quantity) : p.total_recipe_cost;
-            const grossProfit = p.sale_price - p.total_recipe_cost;
+            const yieldQty = p.yield_quantity > 0 ? parseFloat(p.yield_quantity) : 1;
+            const unitCost = p.total_recipe_cost / yieldQty;
+            const grossProfit = p.sale_price - unitCost;
             const profitMarginPct = p.sale_price > 0 ? ((grossProfit / p.sale_price) * 100) : 0;
             const rawWeight = parseFloat(p.raw_weight) || 0;
-            const totalRawWeight = Math.round(rawWeight * (p.yield_quantity || 1) * 100) / 100;
+            const totalRawWeight = Math.round(rawWeight * yieldQty * 100) / 100;
+            const batchGrossProfit = (p.sale_price * yieldQty) - p.total_recipe_cost;
 
             return {
                 ...p,
                 raw_weight: rawWeight,
                 raw_weight_unit: p.raw_weight_unit || 'g',
                 total_raw_weight: totalRawWeight,
-                unit_cost: unitCost,
-                gross_profit: grossProfit,
+                unit_cost: Math.round(unitCost * 100) / 100,
+                gross_profit: Math.round(grossProfit * 100) / 100,
+                batch_gross_profit: Math.round(batchGrossProfit * 100) / 100,
                 profit_margin_pct: Math.round(profitMarginPct * 10) / 10
             };
         });
@@ -104,11 +107,14 @@ router.get('/:id', (req, res) => {
             return res.status(404).json({ error: 'Producto no encontrado' });
         }
 
-        const { items, totalCost } = getProductCostAndRecipe(id, product.yield_quantity);
-        const grossProfit = product.sale_price - totalCost;
+        const yieldQty = product.yield_quantity > 0 ? parseFloat(product.yield_quantity) : 1;
+        const { items, totalCost } = getProductCostAndRecipe(id, yieldQty);
+        const unitCost = totalCost / yieldQty;
+        const grossProfit = product.sale_price - unitCost;
         const profitMarginPct = product.sale_price > 0 ? ((grossProfit / product.sale_price) * 100) : 0;
         const rawWeight = parseFloat(product.raw_weight) || 0;
-        const totalRawWeight = Math.round(rawWeight * (product.yield_quantity || 1) * 100) / 100;
+        const totalRawWeight = Math.round(rawWeight * yieldQty * 100) / 100;
+        const batchGrossProfit = (product.sale_price * yieldQty) - totalCost;
 
         res.json({
             ...product,
@@ -116,9 +122,10 @@ router.get('/:id', (req, res) => {
             raw_weight_unit: product.raw_weight_unit || 'g',
             total_raw_weight: totalRawWeight,
             recipe: items,
-            total_recipe_cost: totalCost,
-            unit_cost: product.yield_quantity > 0 ? (totalCost / product.yield_quantity) : totalCost,
-            gross_profit: grossProfit,
+            total_recipe_cost: Math.round(totalCost * 100) / 100,
+            unit_cost: Math.round(unitCost * 100) / 100,
+            gross_profit: Math.round(grossProfit * 100) / 100,
+            batch_gross_profit: Math.round(batchGrossProfit * 100) / 100,
             profit_margin_pct: Math.round(profitMarginPct * 10) / 10
         });
     } catch (err) {
@@ -240,11 +247,21 @@ router.post('/:id/recipe', (req, res) => {
             }
         });
 
-        const { items: newItems, totalCost } = getProductCostAndRecipe(id);
+        const yieldQty = product.yield_quantity > 0 ? parseFloat(product.yield_quantity) : 1;
+        const { items: newItems, totalCost } = getProductCostAndRecipe(id, yieldQty);
+        const unitCost = totalCost / yieldQty;
+        const grossProfit = product.sale_price - unitCost;
+        const profitMarginPct = product.sale_price > 0 ? ((grossProfit / product.sale_price) * 100) : 0;
+        const batchGrossProfit = (product.sale_price * yieldQty) - totalCost;
+
         res.json({
             message: 'Receta actualizada con éxito',
             recipe: newItems,
-            total_recipe_cost: totalCost
+            total_recipe_cost: Math.round(totalCost * 100) / 100,
+            unit_cost: Math.round(unitCost * 100) / 100,
+            gross_profit: Math.round(grossProfit * 100) / 100,
+            batch_gross_profit: Math.round(batchGrossProfit * 100) / 100,
+            profit_margin_pct: Math.round(profitMarginPct * 10) / 10
         });
     } catch (err) {
         console.error('Error actualizando receta:', err);
