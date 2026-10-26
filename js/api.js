@@ -117,13 +117,14 @@ function calcRecipeCostSync(recipes, ingredients, productId) {
 
 function enrichProductSync(p, recipes, ingredients) {
   const cost          = calcRecipeCostSync(recipes, ingredients, p.id);
-  const yieldQty      = p.yield_quantity > 0 ? p.yield_quantity : 1;
+  const yieldQty      = p.yield_quantity > 0 ? parseFloat(p.yield_quantity) : 1;
   const unitCost      = cost / yieldQty;
-  const profit        = p.sale_price - cost;
+  const profit        = p.sale_price - unitCost;
   const pct           = p.sale_price > 0 ? (profit / p.sale_price) * 100 : 0;
   const rawWeight     = parseFloat(p.raw_weight) || 0;
   const rawWeightUnit = p.raw_weight_unit || 'g';
   const totalRawWeight= Math.round(rawWeight * yieldQty * 100) / 100;
+  const batchGrossProfit = (p.sale_price * yieldQty) - cost;
   return {
     ...p,
     raw_weight:        rawWeight,
@@ -132,6 +133,7 @@ function enrichProductSync(p, recipes, ingredients) {
     total_recipe_cost: Math.round(cost * 100) / 100,
     unit_cost:         Math.round(unitCost * 100) / 100,
     gross_profit:      Math.round(profit * 100) / 100,
+    batch_gross_profit: Math.round(batchGrossProfit * 100) / 100,
     profit_margin_pct: Math.round(pct * 10) / 10,
     ingredients_count: recipes.filter(r => r.product_id == p.id).length
   };
@@ -482,11 +484,13 @@ const API = {
       };
     });
     const totalCost = recipeItems.reduce((s, i) => s + i.ingredient_total_cost, 0);
-    const profit    = p.sale_price - totalCost;
+    const unitCost  = totalCost / yieldQty;
+    const profit    = p.sale_price - unitCost;
     const pct       = p.sale_price > 0 ? (profit / p.sale_price) * 100 : 0;
     const rawWeight = parseFloat(p.raw_weight) || 0;
     const rawWeightUnit = p.raw_weight_unit || 'g';
     const totalRawWeight = Math.round(rawWeight * yieldQty * 100) / 100;
+    const batchGrossProfit = (p.sale_price * yieldQty) - totalCost;
     return {
       ...p,
       raw_weight: rawWeight,
@@ -494,8 +498,9 @@ const API = {
       total_raw_weight: totalRawWeight,
       recipe: recipeItems,
       total_recipe_cost: Math.round(totalCost * 100) / 100,
-      unit_cost: Math.round((totalCost / yieldQty) * 100) / 100,
+      unit_cost: Math.round(unitCost * 100) / 100,
       gross_profit: Math.round(profit * 100) / 100,
+      batch_gross_profit: Math.round(batchGrossProfit * 100) / 100,
       profit_margin_pct: Math.round(pct * 10) / 10
     };
   },
@@ -599,7 +604,7 @@ const API = {
       if (!isEnough) hasShortage = true;
       return { ingredient_id: r.ingredient_id, name: ing.name, category: ing.category, unit: ing.unit, unit_cost: ing.cost_per_unit, base_quantity: r.quantity, required_quantity: reqQty, current_stock: ing.current_stock, is_enough: isEnough, shortage: isEnough ? 0 : Math.round((reqQty - ing.current_stock) * 1000) / 1000, total_cost: itemCost };
     }).filter(Boolean);
-    const expectedRevenue = Math.round((qty / yieldQty) * product.sale_price * 100) / 100;
+    const expectedRevenue = Math.round(qty * product.sale_price * 100) / 100;
     const expectedProfit  = Math.round((expectedRevenue - totalCost) * 100) / 100;
     return { product: { id: product.id, name: product.name, category: product.category, sale_price: product.sale_price, yield_quantity: product.yield_quantity, yield_unit: product.yield_unit }, production_plan: { quantity_to_produce: qty, scale_factor: Math.round(scale * 1000) / 1000, batches: Math.round(scale * 10) / 10, ingredients: calculatedIngredients, has_shortage: hasShortage, total_cost: totalCost, expected_revenue: expectedRevenue, expected_profit: expectedProfit, profit_margin_pct: expectedRevenue > 0 ? Math.round((expectedProfit / expectedRevenue * 100) * 10) / 10 : 0 } };
   },
@@ -651,7 +656,7 @@ const API = {
       product_id: Number(productId),
       quantity: qty,
       total_cost: totalCost,
-      expected_revenue: (qty / yieldQty) * product.sale_price,
+      expected_revenue: Math.round(qty * product.sale_price * 100) / 100,
       notes: notes || `Elaboración de ${qty} ${product.name}`,
       production_date: DB.now()
     });

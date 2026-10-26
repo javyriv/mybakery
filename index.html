@@ -770,19 +770,19 @@
             </select>
           </div>
           <div class="form-group">
-            <label class="form-label">Precio de Venta Sugerido *</label>
-            <input type="number" id="prod-price-input" class="form-control" required step="any" placeholder="₡0">
+            <label class="form-label">Precio de Venta Sugerido (por unidad) *</label>
+            <input type="number" id="prod-price-input" class="form-control" required step="any" placeholder="₡0" oninput="updateRecipeCostPreview()">
           </div>
         </div>
 
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
           <div class="form-group">
             <label class="form-label">Rendimiento Base (Unidades) *</label>
-            <input type="number" id="prod-yield-qty-input" class="form-control" value="1" min="0.1" step="any" oninput="updateBatchWeightPreview()">
+            <input type="number" id="prod-yield-qty-input" class="form-control" value="1" min="0.1" step="any" oninput="updateBatchWeightPreview(); updateRecipeCostPreview();">
           </div>
           <div class="form-group">
             <label class="form-label">Tipo de Unidad *</label>
-            <input type="text" id="prod-yield-unit-input" class="form-control" value="unidad" placeholder="unidad, piezas, galletas...">
+            <input type="text" id="prod-yield-unit-input" class="form-control" value="unidad" placeholder="unidad, piezas, galletas..." oninput="updateBatchWeightPreview(); updateRecipeCostPreview();">
           </div>
         </div>
 
@@ -819,6 +819,7 @@
           <button type="button" class="btn btn-secondary btn-sm btn-block" onclick="addRecipeItemRow()">
             <i class="ti ti-plus"></i> Agregar Ingrediente
           </button>
+          <div id="recipe-live-summary" style="display:none; font-size:12px; background:#fff; border:1px solid var(--primary-200); border-radius:var(--radius-sm); padding:8px 10px; margin-top:8px;"></div>
         </div>
 
         <div style="display:flex; gap:10px; margin-top:14px;">
@@ -1104,8 +1105,8 @@
   <!-- Firebase SDK Compat -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="js/api.js?v=9"></script>
-  <script src="js/ui.js?v=9"></script>
-  <script src="js/app.js?v=9"></script>
+  <script src="js/api.js?v=10"></script>
+  <script src="js/ui.js?v=10"></script>
+  <script src="js/app.js?v=10"></script>
 </body>
 </html>
