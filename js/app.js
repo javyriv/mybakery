@@ -1064,7 +1064,9 @@ async function loadMetrics(options = 'month') {
 
     // Cantidades de ingredientes consumidos
     currentMetricsIngredients = data.ingredients_consumed || [];
+    currentMetricsRecipes = data.recipes_consumed || [];
     renderMetricsIngredientsTable();
+    renderMetricsRecipesTable();
 
     // Gráfico Chart.js
     renderSalesCostChart(data.daily_chart);
@@ -1205,6 +1207,28 @@ function renderSalesCostChart(dailyData) {
   });
 }
 
+// Variables globales para ingredientes y recetas consumidas en métricas
+let currentMetricsRecipes = [];
+let activeMetricsIngredientsView = 'global';
+
+function switchMetricsIngredientsView(view) {
+  activeMetricsIngredientsView = view;
+  const isGlobal = view === 'global';
+  const tabGlobal = document.getElementById('metrics-tab-ing-global');
+  const tabRecipes = document.getElementById('metrics-tab-ing-recipes');
+  const conGlobal = document.getElementById('metrics-ingredients-consolidated-container');
+  const conRecipes = document.getElementById('metrics-ingredients-recipes-container');
+
+  if (tabGlobal) tabGlobal.classList.toggle('active', isGlobal);
+  if (tabRecipes) tabRecipes.classList.toggle('active', !isGlobal);
+  if (conGlobal) conGlobal.style.display = isGlobal ? 'block' : 'none';
+  if (conRecipes) conRecipes.style.display = !isGlobal ? 'flex' : 'none';
+
+  if (!isGlobal) {
+    renderMetricsRecipesTable();
+  }
+}
+
 function renderMetricsIngredientsTable() {
   const tbody = document.getElementById('metrics-ingredients-tbody');
   const totalCostEl = document.getElementById('metrics-ingredients-total-cost');
@@ -1259,10 +1283,137 @@ function renderMetricsIngredientsTable() {
   `).join('');
 }
 
+// Generador HTML para el desglose de productos y sus recetas de ingredientes usados
+function buildRecipesConsumptionHTML(recipesList, query = '') {
+  let list = recipesList || [];
+  if (query) {
+    const q = query.toLowerCase();
+    list = list.filter(r => 
+      (r.product_name || '').toLowerCase().includes(q) ||
+      (r.product_category || '').toLowerCase().includes(q) ||
+      (r.ingredients && r.ingredients.some(ing => (ing.ingredient_name || '').toLowerCase().includes(q) || (ing.ingredient_category || '').toLowerCase().includes(q)))
+    );
+  }
+
+  if (list.length === 0) {
+    return `
+      <div style="text-align:center; padding:28px 16px; color:var(--cream-500); font-size:13px; background:var(--cream-50); border-radius:var(--radius-md); border:1px dashed var(--cream-300);">
+        <i class="ti ti-tools-kitchen-2" style="font-size:24px; display:block; margin-bottom:6px; color:var(--cream-400);"></i>
+        No se encontraron recetas ni insumos consumidos para el período o búsqueda especificada.
+      </div>
+    `;
+  }
+
+  return list.map(recipe => {
+    const ingredients = recipe.ingredients || [];
+    const hasIngredients = ingredients.length > 0;
+    const yieldUnitStr = recipe.yield_unit || 'unds';
+    const totalIngredientsCost = recipe.total_ingredients_cost || ingredients.reduce((sum, ing) => sum + (parseFloat(ing.total_cost) || 0), 0);
+
+    const rowsHtml = hasIngredients ? ingredients.map(ing => `
+      <tr style="border-bottom:1px solid var(--cream-100); transition:background 0.15s;" onmouseover="this.style.background='var(--cream-50)'" onmouseout="this.style.background='transparent'">
+        <td style="padding:8px 12px; font-weight:700; color:var(--cream-900);">
+          ${ing.ingredient_name}
+        </td>
+        <td style="padding:8px 8px; color:var(--cream-600); font-size:11px;">
+          ${ing.ingredient_category || '—'}
+        </td>
+        <td style="padding:8px 8px; text-align:center; color:var(--cream-600); font-size:11px;">
+          ${ing.base_quantity} ${ing.ingredient_unit}
+        </td>
+        <td style="padding:8px 8px; text-align:center;">
+          <span style="font-weight:700; font-size:12px; color:var(--primary-900); background:var(--primary-50); padding:3px 8px; border-radius:6px; border:1px solid var(--primary-200); display:inline-block;">
+            ${ing.total_used} ${ing.ingredient_unit}
+          </span>
+        </td>
+        <td style="padding:8px 8px; text-align:right; color:var(--cream-700); font-size:12px;">
+          ${UI.formatCurrency(ing.cost_per_unit)}/${ing.ingredient_unit}
+        </td>
+        <td style="padding:8px 12px; text-align:right; font-weight:700; color:var(--primary-950);">
+          ${UI.formatCurrency(ing.total_cost)}
+        </td>
+      </tr>
+    `).join('') : `
+      <tr>
+        <td colspan="6" style="padding:14px; text-align:center; color:var(--cream-500); font-style:italic; font-size:12px;">
+          Este producto no tiene insumos configurados en su receta.
+        </td>
+      </tr>
+    `;
+
+    return `
+      <div style="background:#fff; border:1px solid var(--cream-200); border-radius:var(--radius-md); overflow:hidden; box-shadow:var(--shadow-sm); margin-bottom:6px;">
+        <div style="background:var(--cream-50); border-bottom:1px solid var(--cream-200); padding:12px 14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+              <span style="font-size:15px; font-weight:800; color:var(--cream-900);">
+                <i class="ti ti-cake" style="color:var(--primary-600);"></i> ${recipe.product_name}
+              </span>
+              <span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:800; font-size:12px; border:1px solid #bae6fd; padding:3px 8px;">
+                <i class="ti ti-box"></i> ${recipe.total_units_sold} ${yieldUnitStr} elaboradas
+              </span>
+              <span class="badge" style="background:var(--cream-200); color:var(--cream-800); font-size:11px;">
+                ${recipe.product_category || 'General'}
+              </span>
+            </div>
+            <div style="font-size:11px; color:var(--cream-600); margin-top:4px;">
+              Receta base rinde: ${recipe.yield_quantity || 1} ${yieldUnitStr} • En ${recipe.orders_count || 1} pedido(s)
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:10px; color:var(--cream-600); text-transform:uppercase; font-weight:700; letter-spacing:0.5px;">Total Materia Prima</div>
+            <div style="font-size:15px; font-weight:800; color:var(--primary-800);">
+              ${UI.formatCurrency(totalIngredientsCost)}
+            </div>
+          </div>
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; min-width:580px; font-size:12px;">
+            <thead>
+              <tr style="background:#fcfbf9; border-bottom:1px solid var(--cream-200); color:var(--cream-700); text-transform:uppercase; font-size:10px; letter-spacing:0.5px;">
+                <th style="padding:8px 12px; text-align:left;">Ingrediente / Insumo</th>
+                <th style="padding:8px 8px; text-align:left;">Categoría</th>
+                <th style="padding:8px 8px; text-align:center;">Base x Receta</th>
+                <th style="padding:8px 8px; text-align:center;">Cantidad Total Usada</th>
+                <th style="padding:8px 8px; text-align:right;">Costo Unit.</th>
+                <th style="padding:8px 12px; text-align:right;">Total Insumo</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+            <tfoot>
+              <tr style="background:#fcfbf9; border-top:1px solid var(--cream-200); font-weight:700;">
+                <td colspan="5" style="padding:8px 12px; text-align:right; color:var(--cream-800); font-size:12px;">
+                  Total Insumos Usados para ${recipe.total_units_sold} ${yieldUnitStr}:
+                </td>
+                <td style="padding:8px 12px; text-align:right; color:var(--primary-900); font-weight:800; font-size:13px;">
+                  ${UI.formatCurrency(totalIngredientsCost)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderMetricsRecipesTable() {
+  const container = document.getElementById('metrics-ingredients-recipes-container');
+  if (!container) return;
+  const searchInput = document.getElementById('metrics-ingredient-search');
+  const query = searchInput ? searchInput.value.trim() : '';
+  container.innerHTML = buildRecipesConsumptionHTML(currentMetricsRecipes, query);
+}
+
 // ==================== MÓDULO DE HISTÓRICO DE INVENTARIO & CONSUMO ====================
 let currentInvHistConsumption = [];
+let currentInvHistRecipes = [];
 let currentInvHistMovements = [];
 let activeInvHistPeriod = 'all';
+let activeInvHistRecipesPeriod = 'all';
 
 async function openInventoryHistoryModal() {
   UI.openModal('modal-inventory-history');
@@ -1272,14 +1423,87 @@ async function openInventoryHistoryModal() {
 
 function switchInventoryHistorySubTab(tab) {
   const isConsumption = tab === 'consumption';
-  document.getElementById('inv-hist-tab-consumption').classList.toggle('active', isConsumption);
-  document.getElementById('inv-hist-tab-movements').classList.toggle('active', !isConsumption);
-  document.getElementById('inv-hist-subview-consumption').style.display = isConsumption ? 'flex' : 'none';
-  document.getElementById('inv-hist-subview-movements').style.display = !isConsumption ? 'flex' : 'none';
+  const isRecipes = tab === 'recipes';
+  const isMovements = tab === 'movements';
 
-  if (!isConsumption && currentInvHistMovements.length === 0) {
+  const tabCons = document.getElementById('inv-hist-tab-consumption');
+  const tabRec = document.getElementById('inv-hist-tab-recipes');
+  const tabMov = document.getElementById('inv-hist-tab-movements');
+
+  const subCons = document.getElementById('inv-hist-subview-consumption');
+  const subRec = document.getElementById('inv-hist-subview-recipes');
+  const subMov = document.getElementById('inv-hist-subview-movements');
+
+  if (tabCons) tabCons.classList.toggle('active', isConsumption);
+  if (tabRec) tabRec.classList.toggle('active', isRecipes);
+  if (tabMov) tabMov.classList.toggle('active', isMovements);
+
+  if (subCons) subCons.style.display = isConsumption ? 'flex' : 'none';
+  if (subRec) subRec.style.display = isRecipes ? 'flex' : 'none';
+  if (subMov) subMov.style.display = isMovements ? 'flex' : 'none';
+
+  if (isRecipes && currentInvHistRecipes.length === 0) {
+    loadInventoryRecipesModal(activeInvHistRecipesPeriod);
+  } else if (isMovements && currentInvHistMovements.length === 0) {
     loadInventoryMovementsModal();
   }
+}
+
+function applyInventoryRecipesCustomRange() {
+  const fromEl = document.getElementById('inv-hist-rec-date-from');
+  const toEl = document.getElementById('inv-hist-rec-date-to');
+  let from = fromEl ? fromEl.value : '';
+  let to = toEl ? toEl.value : '';
+
+  if (!from && !to) {
+    UI.showToast('Por favor selecciona una fecha o rango.', 'warning');
+    return;
+  }
+  if (from && !to) to = from;
+  if (!from && to) from = to;
+
+  ['today', 'week', 'month', 'all'].forEach(p => {
+    const btn = document.getElementById(`inv-hist-rec-period-${p}`);
+    if (btn) btn.classList.remove('active');
+  });
+
+  loadInventoryRecipesModal({ start_date: from, end_date: to });
+}
+
+async function loadInventoryRecipesModal(options = 'all') {
+  const params = typeof options === 'string' ? { period: options } : options;
+  if (params.period) {
+    activeInvHistRecipesPeriod = params.period;
+    const fromEl = document.getElementById('inv-hist-rec-date-from');
+    const toEl = document.getElementById('inv-hist-rec-date-to');
+    if (fromEl) fromEl.value = '';
+    if (toEl) toEl.value = '';
+    ['today', 'week', 'month', 'all'].forEach(p => {
+      const btn = document.getElementById(`inv-hist-rec-period-${p}`);
+      if (btn) btn.classList.toggle('active', p === params.period);
+    });
+  } else {
+    ['today', 'week', 'month', 'all'].forEach(p => {
+      const btn = document.getElementById(`inv-hist-rec-period-${p}`);
+      if (btn) btn.classList.remove('active');
+    });
+  }
+
+  try {
+    const list = await API.getRecipesConsumption(params);
+    currentInvHistRecipes = list || [];
+    renderInventoryRecipesTable();
+  } catch (err) {
+    UI.showToast('Error cargando recetas consumidas: ' + err.message, 'error');
+  }
+}
+
+function renderInventoryRecipesTable() {
+  const container = document.getElementById('inv-hist-recipes-list-container');
+  if (!container) return;
+  const searchInput = document.getElementById('inv-hist-search-recipes');
+  const query = searchInput ? searchInput.value.trim() : '';
+  container.innerHTML = buildRecipesConsumptionHTML(currentInvHistRecipes, query);
 }
 
 function applyInventoryConsumptionCustomRange() {

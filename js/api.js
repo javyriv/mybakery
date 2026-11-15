@@ -1095,6 +1095,63 @@ const API = {
       };
     }).sort((a, b) => b.total_cost - a.total_cost || b.total_used - a.total_used);
 
+    // Desglose de insumos consumidos por receta vendida
+    const productSoldMap = {};
+    orderItems.forEach(item => {
+      if (!filteredOrderIds.has(item.order_id)) return;
+      const prod = products.find(p => p.id === item.product_id);
+      if (!prod) return;
+      if (!productSoldMap[prod.id]) {
+        productSoldMap[prod.id] = {
+          product_id: prod.id,
+          product_name: prod.name,
+          product_category: prod.category,
+          yield_quantity: prod.yield_quantity > 0 ? prod.yield_quantity : 1,
+          yield_unit: prod.yield_unit || 'unidad',
+          total_units_sold: 0,
+          total_revenue: 0,
+          total_cost: 0,
+          orders_count: 0,
+          _orders: new Set()
+        };
+      }
+      const ps = productSoldMap[prod.id];
+      ps.total_units_sold += item.quantity;
+      ps.total_revenue += item.subtotal;
+      ps.total_cost += item.unit_cost * item.quantity;
+      ps._orders.add(item.order_id);
+    });
+
+    const recipesConsumed = Object.values(productSoldMap).map(p => {
+      const scale = p.total_units_sold / p.yield_quantity;
+      const prodRecipes = recipes.filter(r => r.product_id === p.product_id);
+      const ings = prodRecipes.map(r => {
+        const ing = ingredients.find(i => i.id === r.ingredient_id);
+        const unitCost = ing ? ing.cost_per_unit : 0;
+        const totalUsed = Math.round((r.quantity * scale) * 1000) / 1000;
+        const totalCost = Math.round((totalUsed * unitCost) * 100) / 100;
+        return {
+          ingredient_id: r.ingredient_id,
+          ingredient_name: ing ? ing.name : '—',
+          ingredient_category: ing ? ing.category : '',
+          ingredient_unit: ing ? ing.unit : '',
+          cost_per_unit: unitCost,
+          base_quantity: r.quantity,
+          total_used: totalUsed,
+          total_cost: totalCost
+        };
+      }).sort((a, b) => a.ingredient_name.localeCompare(b.ingredient_name));
+
+      const totalIngredientsCost = ings.reduce((sum, ing) => sum + ing.total_cost, 0);
+      const { _orders, ...rest } = p;
+      return {
+        ...rest,
+        orders_count: _orders.size,
+        total_ingredients_cost: Math.round(totalIngredientsCost * 100) / 100,
+        ingredients: ings
+      };
+    }).sort((a, b) => b.total_units_sold - a.total_units_sold);
+
     let dailyChart = [];
     if (date) {
       dailyChart = [{
@@ -1131,6 +1188,7 @@ const API = {
       top_products: Object.values(productRevMap).sort((a, b) => b.units_sold - a.units_sold).slice(0, 5),
       products_order_status: productsOrderStatus,
       ingredients_consumed: ingredientsConsumed,
+      recipes_consumed: recipesConsumed,
       daily_chart: dailyChart
     };
   },
@@ -1188,6 +1246,11 @@ const API = {
   async getIngredientsConsumption(params = {}) {
     const metrics = await this.getMetrics(params || 'all');
     return metrics.ingredients_consumed || [];
+  },
+
+  async getRecipesConsumption(params = {}) {
+    const metrics = await this.getMetrics(params || 'all');
+    return metrics.recipes_consumed || [];
   },
 
   // ── Autenticación & Usuarios ─────────────────────────────────────

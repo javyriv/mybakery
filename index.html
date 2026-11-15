@@ -436,11 +436,22 @@
               </p>
             </div>
             <div style="display:flex; gap:8px; align-items:center;">
-              <input type="text" id="metrics-ingredient-search" class="form-control" placeholder="🔍 Buscar ingrediente..." style="max-width:210px; min-height:36px; font-size:12px;" oninput="renderMetricsIngredientsTable()">
+              <input type="text" id="metrics-ingredient-search" class="form-control" placeholder="🔍 Buscar insumo o receta..." style="max-width:210px; min-height:36px; font-size:12px;" oninput="renderMetricsIngredientsTable(); renderMetricsRecipesTable();">
             </div>
           </div>
 
-          <div style="overflow-x:auto;">
+          <!-- TABS DE VISTA: CONSOLIDADO VS POR RECETAS VENDIDAS -->
+          <div class="filter-tabs" style="margin-bottom:12px;">
+            <button class="tab-chip active" id="metrics-tab-ing-global" onclick="switchMetricsIngredientsView('global')">
+              <i class="ti ti-list"></i> Consolidado Global de Insumos
+            </button>
+            <button class="tab-chip" id="metrics-tab-ing-recipes" onclick="switchMetricsIngredientsView('recipes')">
+              <i class="ti ti-cake"></i> Por Recetas Vendidas & Insumos Usados
+            </button>
+          </div>
+
+          <!-- VISTA 1: CONSOLIDADO GLOBAL -->
+          <div id="metrics-ingredients-consolidated-container" style="overflow-x:auto;">
             <table style="width:100%; border-collapse:collapse; min-width:620px; font-size:13px;">
               <thead>
                 <tr style="border-bottom:2px solid var(--cream-200); background:var(--cream-50); color:var(--cream-800); text-transform:uppercase; font-size:11px; letter-spacing:0.5px;">
@@ -463,6 +474,11 @@
                 </tr>
               </tfoot>
             </table>
+          </div>
+
+          <!-- VISTA 2: DESGLOSE POR RECETAS VENDIDAS -->
+          <div id="metrics-ingredients-recipes-container" style="display:none; flex-direction:column; gap:14px;">
+            <!-- Se llena dinámicamente con renderMetricsRecipesTable() -->
           </div>
         </div>
       </div>
@@ -1194,6 +1210,9 @@
         <button class="tab-chip active" id="inv-hist-tab-consumption" onclick="switchInventoryHistorySubTab('consumption')">
           <i class="ti ti-tools-kitchen-2"></i> Insumos Usados (Consumo)
         </button>
+        <button class="tab-chip" id="inv-hist-tab-recipes" onclick="switchInventoryHistorySubTab('recipes')">
+          <i class="ti ti-cake"></i> Por Recetas Vendidas & Insumos
+        </button>
         <button class="tab-chip" id="inv-hist-tab-movements" onclick="switchInventoryHistorySubTab('movements')">
           <i class="ti ti-arrows-sort"></i> Registro Kárdex (Entradas & Salidas)
         </button>
@@ -1238,7 +1257,29 @@
         </div>
       </div>
 
-      <!-- SUB-TAB 2: REGISTRO KÁRDEX / MOVIMIENTOS -->
+      <!-- SUB-TAB 2: CONSUMO POR RECETAS VENDIDAS & INSUMOS -->
+      <div id="inv-hist-subview-recipes" style="display:none; flex-direction:column; gap:10px; overflow-y:auto; flex:1;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div class="filter-tabs" style="margin-bottom:0;">
+            <button class="tab-chip" id="inv-hist-rec-period-today" onclick="loadInventoryRecipesModal('today')">Hoy</button>
+            <button class="tab-chip" id="inv-hist-rec-period-week" onclick="loadInventoryRecipesModal('week')">7 Días</button>
+            <button class="tab-chip" id="inv-hist-rec-period-month" onclick="loadInventoryRecipesModal('month')">Este Mes</button>
+            <button class="tab-chip active" id="inv-hist-rec-period-all" onclick="loadInventoryRecipesModal('all')">Histórico Total</button>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <input type="date" id="inv-hist-rec-date-from" class="form-control" style="font-size:12px; padding:2px 6px; min-height:32px; width:125px;" title="Fecha inicial">
+            <input type="date" id="inv-hist-rec-date-to" class="form-control" style="font-size:12px; padding:2px 6px; min-height:32px; width:125px;" title="Fecha final">
+            <button class="btn btn-primary btn-sm" onclick="applyInventoryRecipesCustomRange()" style="min-height:32px; padding:0 10px; font-size:12px;">Filtrar</button>
+            <input type="text" id="inv-hist-search-recipes" class="form-control" placeholder="🔍 Buscar receta o insumo..." style="max-width:180px; min-height:32px; font-size:12px;" oninput="renderInventoryRecipesTable()">
+          </div>
+        </div>
+
+        <div id="inv-hist-recipes-list-container" style="display:flex; flex-direction:column; gap:12px;">
+          <!-- Se llena dinámicamente -->
+        </div>
+      </div>
+
+      <!-- SUB-TAB 3: REGISTRO KÁRDEX / MOVIMIENTOS -->
       <div id="inv-hist-subview-movements" style="display:none; flex-direction:column; gap:10px; overflow-y:auto; flex:1;">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
