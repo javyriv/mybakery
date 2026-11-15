@@ -220,7 +220,8 @@
       <div class="card">
         <div class="card-header">
           <div class="card-title"><i class="ti ti-package"></i> Inventario de Materia Prima</div>
-          <div style="display:flex; gap:6px;">
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-sm" onclick="openInventoryHistoryModal()" title="Historial y cantidades de ingredientes consumidos"><i class="ti ti-history"></i> Histórico de Consumo</button>
             <button class="btn btn-secondary btn-sm" onclick="openStockAdjustmentModal()"><i class="ti ti-plus"></i> Compra/Ajuste</button>
             <button class="btn btn-primary btn-sm" onclick="openNewIngredientModal()"><i class="ti ti-sparkles"></i> Nuevo Insumo</button>
           </div>
@@ -259,10 +260,11 @@
           <button class="tab-chip active" id="order-tab-today" onclick="filterOrdersPeriod('today')">📅 Hoy</button>
           <button class="tab-chip" id="order-tab-tomorrow" onclick="filterOrdersPeriod('tomorrow')">Mañana</button>
           <button class="tab-chip" id="order-tab-week" onclick="filterOrdersPeriod('week')">Esta Semana</button>
+          <button class="tab-chip" id="order-tab-history" onclick="filterOrdersPeriod('history')">📜 Histórico / Pasados</button>
           <button class="tab-chip" id="order-tab-all" onclick="filterOrdersPeriod('all')">Todos</button>
         </div>
 
-        <div style="display:flex; gap:8px; margin-bottom:14px; overflow-x:auto;">
+        <div style="display:flex; gap:8px; margin-bottom:14px; overflow-x:auto; align-items:center;">
           <select id="orders-status-filter" class="form-control" style="max-width:180px; min-height:40px; font-size:13px;" onchange="loadOrders()">
             <option value="">Estado: Todos</option>
             <option value="PENDIENTE">🕒 Pendiente</option>
@@ -277,7 +279,14 @@
             <option value="ABONO_PARCIAL">🟡 Abono Parcial</option>
             <option value="PAGADO">🟢 Pagado</option>
           </select>
+          <div style="display:flex; align-items:center; gap:4px; min-width:170px;">
+            <input type="date" id="orders-date-filter" class="form-control" style="min-height:40px; font-size:13px;" onchange="filterOrdersByDate(this.value)" title="Consultar pedidos por fecha exacta">
+            <button class="btn btn-secondary btn-sm" id="btn-clear-order-date" onclick="clearOrdersDateFilter()" style="display:none; height:40px; padding:0 10px;" title="Limpiar fecha">✕</button>
+          </div>
         </div>
+        <div id="orders-list-container"></div>
+      </div>
+    </section>
         <div id="orders-list-container"></div>
       </div>
     </section>
@@ -381,6 +390,48 @@
               <tbody id="metrics-product-status-tbody">
                 <!-- Se llena dinámicamente -->
               </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- TABLA: CANTIDADES DE INGREDIENTES USADOS EN EL PERÍODO -->
+        <div style="background:#fff; border-radius:var(--radius-md); padding:16px; border:1px solid var(--cream-200); margin-top:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:14px;">
+            <div>
+              <h4 style="font-size:15px; font-weight:700; color:var(--cream-800); margin:0; display:flex; align-items:center; gap:6px;">
+                <i class="ti ti-tools-kitchen-2" style="color:var(--primary-600); font-size:18px;"></i> Cantidades de Ingredientes Usados
+              </h4>
+              <p style="font-size:12px; color:var(--cream-600); margin:2px 0 0 0;">
+                Materia prima y cantidades exactas utilizadas en los pedidos del período seleccionado
+              </p>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <input type="text" id="metrics-ingredient-search" class="form-control" placeholder="🔍 Buscar ingrediente..." style="max-width:210px; min-height:36px; font-size:12px;" oninput="renderMetricsIngredientsTable()">
+            </div>
+          </div>
+
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; min-width:620px; font-size:13px;">
+              <thead>
+                <tr style="border-bottom:2px solid var(--cream-200); background:var(--cream-50); color:var(--cream-800); text-transform:uppercase; font-size:11px; letter-spacing:0.5px;">
+                  <th style="padding:10px 12px; text-align:left;">Ingrediente / Insumo</th>
+                  <th style="padding:10px 8px; text-align:left;">Categoría</th>
+                  <th style="padding:10px 8px; text-align:center;">Cantidad Total Usada</th>
+                  <th style="padding:10px 8px; text-align:right;">Costo Unitario</th>
+                  <th style="padding:10px 12px; text-align:right;">Inversión Total</th>
+                  <th style="padding:10px 8px; text-align:center;">Pedidos que lo usaron</th>
+                </tr>
+              </thead>
+              <tbody id="metrics-ingredients-tbody">
+                <!-- Se llena dinámicamente -->
+              </tbody>
+              <tfoot>
+                <tr style="border-top:2px solid var(--cream-300); background:var(--cream-50); font-weight:700; font-size:13px;">
+                  <td colspan="4" style="padding:10px 12px; text-align:right; color:var(--cream-900);">Total Materia Prima Invertida:</td>
+                  <td id="metrics-ingredients-total-cost" style="padding:10px 12px; text-align:right; color:var(--primary-800);">₡0</td>
+                  <td></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -1098,6 +1149,91 @@
           </button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- MODAL: HISTÓRICO DE CONSUMO Y MOVIMIENTOS DE INVENTARIO -->
+  <div id="modal-inventory-history" class="modal-overlay">
+    <div class="modal-card modal-lg" style="max-width:850px; max-height:90vh; display:flex; flex-direction:column;">
+      <div class="modal-header">
+        <div class="modal-title"><i class="ti ti-history"></i> Histórico de Consumo & Movimientos</div>
+        <button class="btn-close-modal" onclick="closeModal('modal-inventory-history')">&times;</button>
+      </div>
+
+      <div class="filter-tabs" style="margin-bottom:12px;">
+        <button class="tab-chip active" id="inv-hist-tab-consumption" onclick="switchInventoryHistorySubTab('consumption')">
+          <i class="ti ti-tools-kitchen-2"></i> Insumos Usados (Consumo)
+        </button>
+        <button class="tab-chip" id="inv-hist-tab-movements" onclick="switchInventoryHistorySubTab('movements')">
+          <i class="ti ti-arrows-sort"></i> Registro Kárdex (Entradas & Salidas)
+        </button>
+      </div>
+
+      <!-- SUB-TAB 1: CONSUMO DE INSUMOS -->
+      <div id="inv-hist-subview-consumption" style="display:flex; flex-direction:column; gap:10px; overflow-y:auto; flex:1;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div class="filter-tabs" style="margin-bottom:0;">
+            <button class="tab-chip" id="inv-hist-period-today" onclick="loadInventoryConsumptionModal('today')">Hoy</button>
+            <button class="tab-chip" id="inv-hist-period-week" onclick="loadInventoryConsumptionModal('week')">7 Días</button>
+            <button class="tab-chip" id="inv-hist-period-month" onclick="loadInventoryConsumptionModal('month')">Este Mes</button>
+            <button class="tab-chip active" id="inv-hist-period-all" onclick="loadInventoryConsumptionModal('all')">Histórico Total</button>
+          </div>
+          <input type="text" id="inv-hist-search-consumption" class="form-control" placeholder="🔍 Buscar insumo..." style="max-width:180px; min-height:36px; font-size:12px;" oninput="renderInventoryConsumptionTable()">
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; min-width:580px; font-size:13px;">
+            <thead>
+              <tr style="border-bottom:2px solid var(--cream-200); background:var(--cream-50); color:var(--cream-800); text-transform:uppercase; font-size:11px;">
+                <th style="padding:8px 10px; text-align:left;">Insumo</th>
+                <th style="padding:8px 8px; text-align:left;">Categoría</th>
+                <th style="padding:8px 8px; text-align:center;">Cantidad Usada</th>
+                <th style="padding:8px 8px; text-align:right;">Costo Unit.</th>
+                <th style="padding:8px 10px; text-align:right;">Total Consumido</th>
+              </tr>
+            </thead>
+            <tbody id="inv-hist-consumption-tbody"></tbody>
+            <tfoot>
+              <tr style="border-top:2px solid var(--cream-300); background:var(--cream-50); font-weight:700;">
+                <td colspan="4" style="padding:8px 10px; text-align:right;">Total Invertido en Insumos:</td>
+                <td id="inv-hist-consumption-total-cost" style="padding:8px 10px; text-align:right; color:var(--primary-800);">₡0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- SUB-TAB 2: REGISTRO KÁRDEX / MOVIMIENTOS -->
+      <div id="inv-hist-subview-movements" style="display:none; flex-direction:column; gap:10px; overflow-y:auto; flex:1;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <select id="inv-hist-mov-type-filter" class="form-control" style="max-width:190px; min-height:36px; font-size:12px;" onchange="loadInventoryMovementsModal()">
+              <option value="">Tipo: Todos</option>
+              <option value="SALIDAS">🔻 Solo Salidas / Consumos</option>
+              <option value="SALIDA_PEDIDO">📦 Salida x Pedido</option>
+              <option value="SALIDA_PRODUCCION">👨‍🍳 Salida x Producción</option>
+              <option value="ENTRADA">🟢 Entradas / Compras</option>
+              <option value="MERMA">⚠️ Mermas</option>
+            </select>
+          </div>
+          <input type="text" id="inv-hist-search-movements" class="form-control" placeholder="🔍 Buscar movimiento..." style="max-width:200px; min-height:36px; font-size:12px;" oninput="renderInventoryMovementsTable()">
+        </div>
+
+        <div style="overflow-x:auto;">
+          <table style="width:100%; border-collapse:collapse; min-width:640px; font-size:12px;">
+            <thead>
+              <tr style="border-bottom:2px solid var(--cream-200); background:var(--cream-50); color:var(--cream-800); text-transform:uppercase; font-size:11px;">
+                <th style="padding:8px 10px; text-align:left;">Fecha</th>
+                <th style="padding:8px 8px; text-align:left;">Insumo</th>
+                <th style="padding:8px 8px; text-align:center;">Tipo</th>
+                <th style="padding:8px 8px; text-align:center;">Cantidad</th>
+                <th style="padding:8px 10px; text-align:left;">Referencia / Detalle</th>
+              </tr>
+            </thead>
+            <tbody id="inv-hist-movements-tbody"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 

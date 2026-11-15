@@ -344,6 +344,16 @@ async function seedInitialData() {
     { id:1, product_id:2, quantity:10, total_cost:9500, expected_revenue:38000, notes:'Horneada matutina de 10 hogazas de masa madre', production_date:ts }
   ]);
 
+  // Movimientos de salida para los pedidos y producciones iniciales
+  const extraMovements = [
+    { id: 22, ingredient_id: 2, type: 'SALIDA_PEDIDO', quantity: 0.35, unit_cost: 950, reference: 'Pedido PED-2026-0001', notes: 'Insumos para 1 Queque de Zanahoria', created_at: ts },
+    { id: 23, ingredient_id: 4, type: 'SALIDA_PEDIDO', quantity: 0.28, unit_cost: 780, reference: 'Pedido PED-2026-0001', notes: 'Insumos para 1 Queque de Zanahoria', created_at: ts },
+    { id: 24, ingredient_id: 6, type: 'SALIDA_PEDIDO', quantity: 4, unit_cost: 120, reference: 'Pedido PED-2026-0001', notes: 'Insumos para 1 Queque de Zanahoria', created_at: ts },
+    { id: 25, ingredient_id: 3, type: 'SALIDA_PEDIDO', quantity: 0.18, unit_cost: 5400, reference: 'Pedido PED-2026-0001', notes: 'Insumos para 1 Queque de Zanahoria', created_at: ts },
+    { id: 26, ingredient_id: 1, type: 'SALIDA_PRODUCCION', quantity: 5.0, unit_cost: 1100, reference: 'Producción: 10 Hogazas Masa Madre', notes: 'Horneada matutina', created_at: ts }
+  ];
+  await DB.setList('inventory_movements', [...movements, ...extraMovements]);
+
   await DB.setDoc('_seeded', true);
   console.log('✅ Datos de ejemplo cargados en Firebase con éxito.');
 }
@@ -731,7 +741,14 @@ const API = {
     else if (params.period === 'today')   result = result.filter(o => o.delivery_date === today);
     else if (params.period === 'tomorrow')result = result.filter(o => o.delivery_date === DB.dayOffset(1));
     else if (params.period === 'week')    result = result.filter(o => o.delivery_date >= today && o.delivery_date <= DB.dayOffset(7));
+    else if (params.period === 'history' || params.period === 'past') result = result.filter(o => o.delivery_date < today);
+
     result.sort((a, b) => {
+      if (params.period === 'history' || params.period === 'past' || params.period === 'all') {
+        if (a.delivery_date !== b.delivery_date) return b.delivery_date.localeCompare(a.delivery_date);
+        if ((a.delivery_time || '') !== (b.delivery_time || '')) return (b.delivery_time || '').localeCompare(a.delivery_time || '');
+        return b.id - a.id;
+      }
       if (a.delivery_date !== b.delivery_date) return a.delivery_date.localeCompare(b.delivery_date);
       if ((a.delivery_time || '') !== (b.delivery_time || '')) return (a.delivery_time || '').localeCompare(b.delivery_time || '');
       return b.id - a.id;
@@ -922,11 +939,19 @@ const API = {
   // ── Métricas ─────────────────────────────────────────────────────
   async getMetrics(period = 'month') {
     const today = DB.today();
-    const [orders, orderItems, products, ingredients] = await Promise.all([DB.getList('orders'), DB.getList('order_items'), DB.getList('products'), DB.getList('ingredients')]);
+    const [orders, orderItems, products, ingredients, recipes] = await Promise.all([
+      DB.getList('orders'),
+      DB.getList('order_items'),
+      DB.getList('products'),
+      DB.getList('ingredients'),
+      DB.getList('recipes')
+    ]);
+
     let filtered = orders.filter(o => o.status !== 'CANCELADO');
     if      (period === 'today') filtered = filtered.filter(o => o.delivery_date === today);
     else if (period === 'week')  filtered = filtered.filter(o => o.delivery_date >= DB.dayOffset(-7));
     else if (period === 'month') filtered = filtered.filter(o => o.delivery_date >= today.slice(0,7) + '-01');
+
     const totalRevenue   = filtered.reduce((s, o) => s + o.total_amount, 0);
     const totalCost      = filtered.reduce((s, o) => s + o.total_cost,   0);
     const totalCollected = filtered.reduce((s, o) => s + o.total_paid,   0);
@@ -940,9 +965,10 @@ const API = {
       statusMap[o.status].count++;
       statusMap[o.status].total_amount += o.total_amount;
     });
+
     const productRevMap = {};
     orderItems.forEach(item => {
-      const ord = orders.find(o => o.id == item.order_id);
+      const ord = filtered.find(o => o.id == item.order_id);
       if (!ord || ord.status === 'CANCELADO') return;
       const prod = products.find(p => p.id === item.product_id);
       if (!prod) return;
@@ -952,6 +978,7 @@ const API = {
       productRevMap[item.product_id].total_cost    += item.unit_cost * item.quantity;
       productRevMap[item.product_id].profit        += item.subtotal - item.unit_cost * item.quantity;
     });
+
     const productStatusMap = {};
     orderItems.forEach(item => {
       const ord = filtered.find(o => o.id == item.order_id);
@@ -1004,12 +1031,73 @@ const API = {
       return { ...rest, orders_count: Object.keys(_orders).length };
     }).sort((a, b) => (b.pending_units - a.pending_units) || (b.total_units - a.total_units));
 
-    const dailyChart = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = DB.dayOffset(-i);
-      const dayOrds = orders.filter(o => o.delivery_date === d && o.status !== 'CANCELADO');
-      dailyChart.push({ date: d, revenue: dayOrds.reduce((s, o) => s + o.total_amount, 0), cost: dayOrds.reduce((s, o) => s + o.total_cost, 0), profit: dayOrds.reduce((s, o) => s + (o.total_amount - o.total_cost), 0) });
+    // Consumo histórico de ingredientes en el período
+    const ingredientConsumptionMap = {};
+    const filteredOrderIds = new Set(filtered.map(o => o.id));
+
+    orderItems.forEach(item => {
+      if (!filteredOrderIds.has(item.order_id)) return;
+      const prod = products.find(p => p.id === item.product_id);
+      if (!prod) return;
+      const yieldQty = prod.yield_quantity > 0 ? prod.yield_quantity : 1;
+      const scale = item.quantity / yieldQty;
+
+      const prodRecipes = recipes.filter(r => r.product_id === prod.id);
+      prodRecipes.forEach(r => {
+        const ing = ingredients.find(i => i.id === r.ingredient_id);
+        if (!ing) return;
+        if (!ingredientConsumptionMap[ing.id]) {
+          ingredientConsumptionMap[ing.id] = {
+            ingredient_id: ing.id,
+            ingredient_name: ing.name,
+            ingredient_category: ing.category,
+            ingredient_unit: ing.unit,
+            cost_per_unit: ing.cost_per_unit,
+            total_used: 0,
+            total_cost: 0,
+            orders_count: 0,
+            _orders: new Set()
+          };
+        }
+        const used = Math.round((r.quantity * scale) * 1000) / 1000;
+        const cMap = ingredientConsumptionMap[ing.id];
+        cMap.total_used += used;
+        cMap.total_cost += Math.round((used * ing.cost_per_unit) * 100) / 100;
+        cMap._orders.add(item.order_id);
+      });
+    });
+
+    const ingredientsConsumed = Object.values(ingredientConsumptionMap).map(ic => {
+      const { _orders, ...rest } = ic;
+      return {
+        ...rest,
+        total_used: Math.round(rest.total_used * 1000) / 1000,
+        total_cost: Math.round(rest.total_cost * 100) / 100,
+        orders_count: _orders.size
+      };
+    }).sort((a, b) => b.total_cost - a.total_cost || b.total_used - a.total_used);
+
+    let dailyChart = [];
+    if (period === 'all') {
+      const datesSet = new Set(filtered.map(o => o.delivery_date).filter(Boolean));
+      const sortedDates = Array.from(datesSet).sort();
+      dailyChart = sortedDates.map(d => {
+        const dayOrds = filtered.filter(o => o.delivery_date === d);
+        return {
+          date: d,
+          revenue: Math.round(dayOrds.reduce((s, o) => s + o.total_amount, 0) * 100) / 100,
+          cost: Math.round(dayOrds.reduce((s, o) => s + o.total_cost, 0) * 100) / 100,
+          profit: Math.round(dayOrds.reduce((s, o) => s + (o.total_amount - o.total_cost), 0) * 100) / 100
+        };
+      });
+    } else {
+      for (let i = 6; i >= 0; i--) {
+        const d = DB.dayOffset(-i);
+        const dayOrds = orders.filter(o => o.delivery_date === d && o.status !== 'CANCELADO');
+        dailyChart.push({ date: d, revenue: dayOrds.reduce((s, o) => s + o.total_amount, 0), cost: dayOrds.reduce((s, o) => s + o.total_cost, 0), profit: dayOrds.reduce((s, o) => s + (o.total_amount - o.total_cost), 0) });
+      }
     }
+
     return {
       period: period || 'month',
       summary: { total_orders: filtered.length, total_revenue: Math.round(totalRevenue*100)/100, total_cost: Math.round(totalCost*100)/100, net_profit: Math.round(netProfit*100)/100, profit_margin_pct: profitPct, total_collected: Math.round(totalCollected*100)/100, period_receivables: Math.round(periodReceiv*100)/100, global_receivables: Math.round(globalReceiv*100)/100 },
@@ -1017,8 +1105,64 @@ const API = {
       status_breakdown: Object.values(statusMap),
       top_products: Object.values(productRevMap).sort((a, b) => b.units_sold - a.units_sold).slice(0, 5),
       products_order_status: productsOrderStatus,
+      ingredients_consumed: ingredientsConsumed,
       daily_chart: dailyChart
     };
+  },
+
+  // ── Movimientos e Historial de Inventario ─────────────────────────
+  async getMovements(params = {}) {
+    await ensureDatabaseReady();
+    const [allMovs, allIngs] = await Promise.all([
+      DB.getList('inventory_movements'),
+      DB.getList('ingredients')
+    ]);
+    let result = allMovs.map(m => {
+      const ing = allIngs.find(i => i.id == m.ingredient_id);
+      return {
+        ...m,
+        ingredient_name: ing ? ing.name : '—',
+        ingredient_category: ing ? ing.category : '',
+        ingredient_unit: ing ? ing.unit : '',
+        total_cost: Math.round((m.quantity * (m.unit_cost || (ing ? ing.cost_per_unit : 0))) * 100) / 100
+      };
+    });
+    if (params.type) {
+      if (params.type === 'SALIDAS') {
+        result = result.filter(m => (m.type || '').startsWith('SALIDA'));
+      } else {
+        result = result.filter(m => m.type === params.type);
+      }
+    }
+    if (params.ingredient_id) {
+      result = result.filter(m => m.ingredient_id == params.ingredient_id);
+    }
+    result.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '') || b.id - a.id);
+    if (params.limit) {
+      result = result.slice(0, parseInt(params.limit));
+    }
+    return result;
+  },
+
+  async getProductionHistory() {
+    await ensureDatabaseReady();
+    const [prods, products] = await Promise.all([
+      DB.getList('productions'),
+      DB.getList('products')
+    ]);
+    return prods.map(pr => {
+      const p = products.find(x => x.id == pr.product_id);
+      return {
+        ...pr,
+        product_name: p ? p.name : '—',
+        yield_unit: p ? p.yield_unit : 'unidad'
+      };
+    }).sort((a, b) => (b.production_date || '').localeCompare(a.production_date || '') || b.id - a.id);
+  },
+
+  async getIngredientsConsumption(params = {}) {
+    const metrics = await this.getMetrics(params.period || 'all');
+    return metrics.ingredients_consumed || [];
   },
 
   // ── Autenticación & Usuarios ─────────────────────────────────────
