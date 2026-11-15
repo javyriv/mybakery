@@ -279,9 +279,12 @@
             <option value="ABONO_PARCIAL">🟡 Abono Parcial</option>
             <option value="PAGADO">🟢 Pagado</option>
           </select>
-          <div style="display:flex; align-items:center; gap:4px; min-width:170px;">
-            <input type="date" id="orders-date-filter" class="form-control" style="min-height:40px; font-size:13px;" onchange="filterOrdersByDate(this.value)" title="Consultar pedidos por fecha exacta">
-            <button class="btn btn-secondary btn-sm" id="btn-clear-order-date" onclick="clearOrdersDateFilter()" style="display:none; height:40px; padding:0 10px;" title="Limpiar fecha">✕</button>
+          <div style="display:flex; align-items:center; gap:5px; background:var(--cream-100); padding:3px 8px; border-radius:var(--radius-sm); border:1px solid var(--cream-300); flex-wrap:wrap;">
+            <span style="font-size:11px; font-weight:700; color:var(--cream-800);">Desde:</span>
+            <input type="date" id="orders-date-from" class="form-control" style="min-height:32px; font-size:12px; width:125px; padding:2px 6px;" onchange="applyOrdersCustomDateFilter()" title="Fecha inicial">
+            <span style="font-size:11px; font-weight:700; color:var(--cream-800);">Hasta:</span>
+            <input type="date" id="orders-date-to" class="form-control" style="min-height:32px; font-size:12px; width:125px; padding:2px 6px;" onchange="applyOrdersCustomDateFilter()" title="Fecha final">
+            <button class="btn btn-secondary btn-sm" id="btn-clear-order-date" onclick="clearOrdersDateFilter()" style="display:none; height:32px; padding:0 8px; font-size:11px;" title="Limpiar rango de fechas">✕</button>
           </div>
         </div>
         <div id="orders-list-container"></div>
@@ -308,13 +311,40 @@
     <!-- VISTA 6: MÉTRICAS Y FINANZAS -->
     <section id="view-metrics" class="app-view" style="display:none;">
       <div class="card">
-        <div class="card-header">
+        <div class="card-header" style="flex-wrap:wrap; gap:10px;">
           <div class="card-title"><i class="ti ti-chart-bar"></i> Rendimiento Financiero</div>
           <div class="filter-tabs" style="margin-bottom:0;">
             <button class="tab-chip" id="metrics-tab-today" onclick="filterMetricsPeriod('today')">Hoy</button>
             <button class="tab-chip" id="metrics-tab-week" onclick="filterMetricsPeriod('week')">7 Días</button>
             <button class="tab-chip active" id="metrics-tab-month" onclick="filterMetricsPeriod('month')">Este Mes</button>
             <button class="tab-chip" id="metrics-tab-all" onclick="filterMetricsPeriod('all')">Histórico</button>
+          </div>
+        </div>
+
+        <!-- BARRA DE FILTRADO POR RANGO DE FECHAS / MES ESPECÍFICO -->
+        <div style="background:var(--cream-100); border:1px solid var(--cream-200); border-radius:var(--radius-md); padding:10px 14px; margin-bottom:16px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px;">
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <span style="font-size:12px; font-weight:700; color:var(--primary-900); display:flex; align-items:center; gap:5px;">
+              <i class="ti ti-calendar-event"></i> Consultar por Rango o Fecha:
+            </span>
+            <div style="display:flex; align-items:center; gap:5px;">
+              <label style="font-size:11px; color:var(--cream-700); font-weight:600;">Desde:</label>
+              <input type="date" id="metrics-date-from" class="form-control" style="font-size:12px; padding:4px 8px; min-height:34px; width:135px;" onchange="handleMetricsCustomDateChange()">
+            </div>
+            <div style="display:flex; align-items:center; gap:5px;">
+              <label style="font-size:11px; color:var(--cream-700); font-weight:600;">Hasta:</label>
+              <input type="date" id="metrics-date-to" class="form-control" style="font-size:12px; padding:4px 8px; min-height:34px; width:135px;" onchange="handleMetricsCustomDateChange()">
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="applyMetricsCustomRange()" style="min-height:34px; padding:0 12px; font-size:12px;">
+              <i class="ti ti-search"></i> Consultar
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btn-clear-metrics-range" onclick="clearMetricsCustomRange()" style="display:none; min-height:34px; padding:0 10px; font-size:12px;" title="Volver a los períodos predeterminados">
+              ✕ Limpiar
+            </button>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <label style="font-size:11px; color:var(--cream-700); font-weight:600;"><i class="ti ti-calendar-month"></i> Mes determinado:</label>
+            <input type="month" id="metrics-month-picker" class="form-control" style="font-size:12px; padding:4px 8px; min-height:34px; width:140px;" onchange="filterMetricsByMonth(this.value)" title="Consultar un mes completo de inicio a fin">
           </div>
         </div>
 
@@ -1178,7 +1208,12 @@
             <button class="tab-chip" id="inv-hist-period-month" onclick="loadInventoryConsumptionModal('month')">Este Mes</button>
             <button class="tab-chip active" id="inv-hist-period-all" onclick="loadInventoryConsumptionModal('all')">Histórico Total</button>
           </div>
-          <input type="text" id="inv-hist-search-consumption" class="form-control" placeholder="🔍 Buscar insumo..." style="max-width:180px; min-height:36px; font-size:12px;" oninput="renderInventoryConsumptionTable()">
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <input type="date" id="inv-hist-date-from" class="form-control" style="font-size:12px; padding:2px 6px; min-height:32px; width:125px;" title="Fecha inicial">
+            <input type="date" id="inv-hist-date-to" class="form-control" style="font-size:12px; padding:2px 6px; min-height:32px; width:125px;" title="Fecha final">
+            <button class="btn btn-primary btn-sm" onclick="applyInventoryConsumptionCustomRange()" style="min-height:32px; padding:0 10px; font-size:12px;">Filtrar</button>
+            <input type="text" id="inv-hist-search-consumption" class="form-control" placeholder="🔍 Buscar insumo..." style="max-width:160px; min-height:32px; font-size:12px;" oninput="renderInventoryConsumptionTable()">
+          </div>
         </div>
 
         <div style="overflow-x:auto;">
@@ -1206,8 +1241,8 @@
       <!-- SUB-TAB 2: REGISTRO KÁRDEX / MOVIMIENTOS -->
       <div id="inv-hist-subview-movements" style="display:none; flex-direction:column; gap:10px; overflow-y:auto; flex:1;">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <select id="inv-hist-mov-type-filter" class="form-control" style="max-width:190px; min-height:36px; font-size:12px;" onchange="loadInventoryMovementsModal()">
+          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+            <select id="inv-hist-mov-type-filter" class="form-control" style="max-width:180px; min-height:32px; font-size:12px;" onchange="loadInventoryMovementsModal()">
               <option value="">Tipo: Todos</option>
               <option value="SALIDAS">🔻 Solo Salidas / Consumos</option>
               <option value="SALIDA_PEDIDO">📦 Salida x Pedido</option>
@@ -1215,8 +1250,10 @@
               <option value="ENTRADA">🟢 Entradas / Compras</option>
               <option value="MERMA">⚠️ Mermas</option>
             </select>
+            <input type="date" id="inv-hist-mov-from" class="form-control" style="font-size:12px; padding:2px 6px; min-height:32px; width:125px;" title="Desde" onchange="loadInventoryMovementsModal()">
+            <input type="date" id="inv-hist-mov-to" class="form-control" style="font-size:12px; padding:2px 6px; min-height:32px; width:125px;" title="Hasta" onchange="loadInventoryMovementsModal()">
           </div>
-          <input type="text" id="inv-hist-search-movements" class="form-control" placeholder="🔍 Buscar movimiento..." style="max-width:200px; min-height:36px; font-size:12px;" oninput="renderInventoryMovementsTable()">
+          <input type="text" id="inv-hist-search-movements" class="form-control" placeholder="🔍 Buscar movimiento..." style="max-width:180px; min-height:32px; font-size:12px;" oninput="renderInventoryMovementsTable()">
         </div>
 
         <div style="overflow-x:auto;">

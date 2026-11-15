@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const router = express.Router();
 const { query, get, run, transaction } = require('../database/db');
 
@@ -127,12 +127,18 @@ router.get('/movements', (req, res) => {
 // Resumen acumulado de ingredientes consumidos / usados (por recetas de pedidos y producciones)
 router.get('/consumption', (req, res) => {
     try {
-        const { period, start_date, end_date } = req.query;
+        const { period, start_date, end_date, date } = req.query;
         let dateFilter = "";
         const today = new Date().toISOString().split('T')[0];
 
-        if (start_date && end_date) {
+        if (date) {
+            dateFilter = ` AND o.delivery_date = '${date}'`;
+        } else if (start_date && end_date) {
             dateFilter = ` AND o.delivery_date BETWEEN '${start_date}' AND '${end_date}'`;
+        } else if (start_date) {
+            dateFilter = ` AND o.delivery_date >= '${start_date}'`;
+        } else if (end_date) {
+            dateFilter = ` AND o.delivery_date <= '${end_date}'`;
         } else if (period === 'today') {
             dateFilter = ` AND o.delivery_date = '${today}'`;
         } else if (period === 'week') {

@@ -2,16 +2,28 @@ const express = require('express');
 const router = express.Router();
 const { query, get } = require('../database/db');
 
-// Obtener métricas financieras y operativas con filtro de período
+// Obtener métricas financieras y operativas con filtro de período o fechas personalizadas
 router.get('/', (req, res) => {
     try {
-        const { period } = req.query; // 'today', 'week', 'month', 'all' (por defecto 'month')
+        const { period, start_date, end_date, date } = req.query; // 'today', 'week', 'month', 'all', o rango personalizado
 
         let dateFilterOrders = "WHERE o.status != 'CANCELADO'";
         let dateFilterPayments = "WHERE 1=1";
         const today = new Date().toISOString().split('T')[0];
 
-        if (period === 'today') {
+        if (date) {
+            dateFilterOrders += ` AND o.delivery_date = '${date}'`;
+            dateFilterPayments += ` AND date(p.payment_date) = '${date}'`;
+        } else if (start_date && end_date) {
+            dateFilterOrders += ` AND o.delivery_date BETWEEN '${start_date}' AND '${end_date}'`;
+            dateFilterPayments += ` AND date(p.payment_date) BETWEEN '${start_date}' AND '${end_date}'`;
+        } else if (start_date) {
+            dateFilterOrders += ` AND o.delivery_date >= '${start_date}'`;
+            dateFilterPayments += ` AND date(p.payment_date) >= '${start_date}'`;
+        } else if (end_date) {
+            dateFilterOrders += ` AND o.delivery_date <= '${end_date}'`;
+            dateFilterPayments += ` AND date(p.payment_date) <= '${end_date}'`;
+        } else if (period === 'today') {
             dateFilterOrders += ` AND o.delivery_date = '${today}'`;
             dateFilterPayments += ` AND date(p.payment_date) = '${today}'`;
         } else if (period === 'week') {
@@ -74,9 +86,9 @@ router.get('/', (req, res) => {
             LIMIT 5
         `);
 
-        // Datos para gráfico (si es histórico agrupa por fechas de pedidos, si no últimos 7 días)
+        // Datos para gráfico (si es rango personalizado, fecha específica o histórico agrupa por fechas de pedidos)
         let dailyChart;
-        if (period === 'all') {
+        if (date) {
             dailyChart = query(`
                 SELECT 
                     o.delivery_date as date,
@@ -84,7 +96,21 @@ router.get('/', (req, res) => {
                     COALESCE(SUM(o.total_cost), 0) as cost,
                     COALESCE(SUM(o.total_amount - o.total_cost), 0) as profit
                 FROM orders o
-                WHERE o.status != 'CANCELADO'
+                WHERE o.status != 'CANCELADO' AND o.delivery_date = '${date}'
+                GROUP BY o.delivery_date
+            `);
+            if (dailyChart.length === 0) {
+                dailyChart = [{ date, revenue: 0, cost: 0, profit: 0 }];
+            }
+        } else if (start_date || end_date || period === 'all') {
+            dailyChart = query(`
+                SELECT 
+                    o.delivery_date as date,
+                    COALESCE(SUM(o.total_amount), 0) as revenue,
+                    COALESCE(SUM(o.total_cost), 0) as cost,
+                    COALESCE(SUM(o.total_amount - o.total_cost), 0) as profit
+                FROM orders o
+                ${dateFilterOrders}
                 GROUP BY o.delivery_date
                 ORDER BY o.delivery_date ASC
             `);
@@ -166,7 +192,8 @@ router.get('/', (req, res) => {
         `);
 
         res.json({
-            period: period || 'month',
+            period: period || (start_date && end_date ? `${start_date} al ${end_date}` : (date || 'custom')),
+            filters: { period, start_date, end_date, date },
             summary: {
                 total_orders: totals.total_orders,
                 total_revenue: totals.total_revenue,

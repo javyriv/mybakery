@@ -81,7 +81,7 @@ function restoreOrderInventory(orderId, orderNumber) {
 // Listar pedidos con filtros de fecha y estado
 router.get('/', (req, res) => {
     try {
-        const { status, payment_status, period, date } = req.query;
+        const { status, payment_status, period, date, start_date, end_date } = req.query;
         let sql = `
             SELECT 
                 o.id,
@@ -122,6 +122,15 @@ router.get('/', (req, res) => {
         if (date) {
             sql += ` AND o.delivery_date = ?`;
             params.push(date);
+        } else if (start_date && end_date) {
+            sql += ` AND o.delivery_date BETWEEN ? AND ?`;
+            params.push(start_date, end_date);
+        } else if (start_date) {
+            sql += ` AND o.delivery_date >= ?`;
+            params.push(start_date);
+        } else if (end_date) {
+            sql += ` AND o.delivery_date <= ?`;
+            params.push(end_date);
         } else if (period === 'today') {
             const today = new Date().toISOString().split('T')[0];
             sql += ` AND o.delivery_date = ?`;
@@ -141,7 +150,7 @@ router.get('/', (req, res) => {
             params.push(today);
         }
 
-        if (period === 'history' || period === 'past' || period === 'all') {
+        if (start_date || end_date || period === 'history' || period === 'past' || period === 'all') {
             sql += ` ORDER BY o.delivery_date DESC, o.delivery_time DESC, o.id DESC`;
         } else {
             sql += ` ORDER BY o.delivery_date ASC, o.delivery_time ASC, o.id DESC`;

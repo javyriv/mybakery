@@ -95,7 +95,12 @@ const API = {
   deleteUser: (id) => API.request(`/users/${id}`, { method: 'DELETE' }),
 
   // Finanzas y Métricas
-  getMetrics: (period = 'month') => API.request(`/metrics?period=${period}`),
+  getMetrics: (params = 'month') => {
+    const qs = typeof params === 'string' 
+      ? `period=${encodeURIComponent(params)}` 
+      : new URLSearchParams(params).toString();
+    return API.request(`/metrics${qs ? '?' + qs : ''}`);
+  },
   getSettings: () => API.request('/settings'),
   saveSettings: (data) => API.request('/settings', { method: 'POST', body: JSON.stringify(data) })
 };
