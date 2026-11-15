@@ -66,30 +66,106 @@ router.get('/alerts', (req, res) => {
     }
 });
 
-// Historial de movimientos de inventario
+// Historial de movimientos de inventario con filtros avanzados
 router.get('/movements', (req, res) => {
     try {
-        const limit = parseInt(req.query.limit) || 50;
-        const movements = query(`
+        const limit = parseInt(req.query.limit) || 100;
+        const { type, ingredient_id, start_date, end_date } = req.query;
+
+        let sql = `
             SELECT 
                 m.id,
+                m.ingredient_id,
                 m.type,
                 m.quantity,
                 m.unit_cost,
+                ROUND(m.quantity * COALESCE(m.unit_cost, i.cost_per_unit, 0), 2) as total_cost,
                 m.reference,
                 m.notes,
                 m.created_at,
                 i.name as ingredient_name,
+                i.category as ingredient_category,
                 i.unit as ingredient_unit
             FROM inventory_movements m
             JOIN ingredients i ON m.ingredient_id = i.id
-            ORDER BY m.created_at DESC
-            LIMIT ?
-        `, [limit]);
+            WHERE 1=1
+        `;
+        const params = [];
+
+        if (type) {
+            if (type === 'SALIDAS') {
+                sql += " AND m.type LIKE 'SALIDA%'";
+            } else {
+                sql += " AND m.type = ?";
+                params.push(type);
+            }
+        }
+        if (ingredient_id) {
+            sql += " AND m.ingredient_id = ?";
+            params.push(ingredient_id);
+        }
+        if (start_date) {
+            sql += " AND date(m.created_at) >= date(?)";
+            params.push(start_date);
+        }
+        if (end_date) {
+            sql += " AND date(m.created_at) <= date(?)";
+            params.push(end_date);
+        }
+
+        sql += " ORDER BY m.created_at DESC, m.id DESC LIMIT ?";
+        params.push(limit);
+
+        const movements = query(sql, params);
         res.json(movements);
     } catch (err) {
         console.error('Error obteniendo movimientos:', err);
         res.status(500).json({ error: 'Error al consultar movimientos' });
+    }
+});
+
+// Resumen acumulado de ingredientes consumidos / usados (por recetas de pedidos y producciones)
+router.get('/consumption', (req, res) => {
+    try {
+        const { period, start_date, end_date } = req.query;
+        let dateFilter = "";
+        const today = new Date().toISOString().split('T')[0];
+
+        if (start_date && end_date) {
+            dateFilter = ` AND o.delivery_date BETWEEN '${start_date}' AND '${end_date}'`;
+        } else if (period === 'today') {
+            dateFilter = ` AND o.delivery_date = '${today}'`;
+        } else if (period === 'week') {
+            dateFilter = ` AND o.delivery_date >= date('now', '-7 days')`;
+        } else if (period === 'month') {
+            dateFilter = ` AND o.delivery_date >= date('now', 'start of month')`;
+        } // 'all' o vacio no aplica filtro de fecha
+
+        const ingredientsUsed = query(`
+            SELECT 
+                i.id as ingredient_id,
+                i.name as ingredient_name,
+                i.category as ingredient_category,
+                i.unit as ingredient_unit,
+                i.cost_per_unit,
+                ROUND(SUM((r.quantity * (oi.quantity / COALESCE(NULLIF(p.yield_quantity, 0), 1)))), 3) as total_used,
+                ROUND(SUM((r.quantity * (oi.quantity / COALESCE(NULLIF(p.yield_quantity, 0), 1))) * i.cost_per_unit), 2) as total_cost,
+                COUNT(DISTINCT o.id) as orders_count
+            FROM order_items oi
+            JOIN orders o ON oi.order_id = o.id
+            JOIN products p ON oi.product_id = p.id
+            JOIN recipes r ON r.product_id = p.id
+            JOIN ingredients i ON r.ingredient_id = i.id
+            WHERE o.status != 'CANCELADO'
+            ${dateFilter}
+            GROUP BY i.id
+            ORDER BY total_cost DESC, total_used DESC
+        `);
+
+        res.json(ingredientsUsed);
+    } catch (err) {
+        console.error('Error obteniendo consumo de insumos:', err);
+        res.status(500).json({ error: 'Error al calcular consumo de materias primas' });
     }
 });
 

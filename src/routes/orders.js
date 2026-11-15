@@ -135,9 +135,17 @@ router.get('/', (req, res) => {
             const nextWeek = new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0];
             sql += ` AND o.delivery_date BETWEEN ? AND ?`;
             params.push(today, nextWeek);
+        } else if (period === 'history' || period === 'past') {
+            const today = new Date().toISOString().split('T')[0];
+            sql += ` AND o.delivery_date < ?`;
+            params.push(today);
         }
 
-        sql += ` ORDER BY o.delivery_date ASC, o.delivery_time ASC, o.id DESC`;
+        if (period === 'history' || period === 'past' || period === 'all') {
+            sql += ` ORDER BY o.delivery_date DESC, o.delivery_time DESC, o.id DESC`;
+        } else {
+            sql += ` ORDER BY o.delivery_date ASC, o.delivery_time ASC, o.id DESC`;
+        }
 
         const orders = query(sql, params);
         if (orders.length > 0) {

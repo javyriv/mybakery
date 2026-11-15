@@ -1,4 +1,5 @@
 const { getDb, initSchema, query, run, transaction } = require('./db');
+const { enrichHistoricalMovements } = require('./enrich_movements');
 
 function seedDatabase() {
     console.log('🥖 Inicializando y sembrando datos de prueba para Dulce Menta...');
@@ -238,6 +239,8 @@ function seedDatabase() {
             VALUES (?, 10, 9500, 38000, 'Horneada matutina de 10 hogazas de masa madre')
         `, [p2Id]);
     });
+
+    enrichHistoricalMovements();
 
     console.log('✅ Base de datos sembrada con éxito con catálogo, recetas, inventario y pedidos de ejemplo.');
 }

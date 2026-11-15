@@ -54,7 +54,7 @@ router.get('/', (req, res) => {
             GROUP BY status
         `);
 
-        // Top 5 Productos más vendidos
+        // Top 5 Productos más vendidos en el período
         const topProducts = query(`
             SELECT 
                 p.id,
@@ -68,29 +68,67 @@ router.get('/', (req, res) => {
             JOIN orders o ON oi.order_id = o.id
             JOIN products p ON oi.product_id = p.id
             WHERE o.status != 'CANCELADO'
+            ${dateFilterOrders ? dateFilterOrders.replace('WHERE', 'AND') : ''}
             GROUP BY p.id
             ORDER BY units_sold DESC
             LIMIT 5
         `);
 
-        // Datos para gráfico diario (últimos 7 días)
-        const dailyChart = query(`
-            WITH RECURSIVE dates(date) AS (
-                SELECT date('now', '-6 days')
-                UNION ALL
-                SELECT date(date, '+1 day')
-                FROM dates
-                WHERE date < date('now')
-            )
+        // Datos para gráfico (si es histórico agrupa por fechas de pedidos, si no últimos 7 días)
+        let dailyChart;
+        if (period === 'all') {
+            dailyChart = query(`
+                SELECT 
+                    o.delivery_date as date,
+                    COALESCE(SUM(o.total_amount), 0) as revenue,
+                    COALESCE(SUM(o.total_cost), 0) as cost,
+                    COALESCE(SUM(o.total_amount - o.total_cost), 0) as profit
+                FROM orders o
+                WHERE o.status != 'CANCELADO'
+                GROUP BY o.delivery_date
+                ORDER BY o.delivery_date ASC
+            `);
+        } else {
+            dailyChart = query(`
+                WITH RECURSIVE dates(date) AS (
+                    SELECT date('now', '-6 days')
+                    UNION ALL
+                    SELECT date(date, '+1 day')
+                    FROM dates
+                    WHERE date < date('now')
+                )
+                SELECT 
+                    d.date,
+                    COALESCE(SUM(o.total_amount), 0) as revenue,
+                    COALESCE(SUM(o.total_cost), 0) as cost,
+                    COALESCE(SUM(o.total_amount - o.total_cost), 0) as profit
+                FROM dates d
+                LEFT JOIN orders o ON d.date = o.delivery_date AND o.status != 'CANCELADO'
+                GROUP BY d.date
+                ORDER BY d.date ASC
+            `);
+        }
+
+        // Resumen de consumo de insumos e ingredientes usados en el período
+        const ingredientsConsumed = query(`
             SELECT 
-                d.date,
-                COALESCE(SUM(o.total_amount), 0) as revenue,
-                COALESCE(SUM(o.total_cost), 0) as cost,
-                COALESCE(SUM(o.total_amount - o.total_cost), 0) as profit
-            FROM dates d
-            LEFT JOIN orders o ON d.date = o.delivery_date AND o.status != 'CANCELADO'
-            GROUP BY d.date
-            ORDER BY d.date ASC
+                i.id as ingredient_id,
+                i.name as ingredient_name,
+                i.category as ingredient_category,
+                i.unit as ingredient_unit,
+                i.cost_per_unit,
+                ROUND(SUM((r.quantity * (oi.quantity / COALESCE(NULLIF(p.yield_quantity, 0), 1)))), 3) as total_used,
+                ROUND(SUM((r.quantity * (oi.quantity / COALESCE(NULLIF(p.yield_quantity, 0), 1))) * i.cost_per_unit), 2) as total_cost,
+                COUNT(DISTINCT o.id) as orders_count
+            FROM order_items oi
+            JOIN orders o ON oi.order_id = o.id
+            JOIN products p ON oi.product_id = p.id
+            JOIN recipes r ON r.product_id = p.id
+            JOIN ingredients i ON r.ingredient_id = i.id
+            WHERE o.status != 'CANCELADO'
+            ${dateFilterOrders ? dateFilterOrders.replace('WHERE', 'AND') : ''}
+            GROUP BY i.id
+            ORDER BY total_cost DESC, total_used DESC
         `);
 
         // Resumen rápido de inventario
@@ -143,6 +181,7 @@ router.get('/', (req, res) => {
             status_breakdown: statusBreakdown,
             top_products: topProducts,
             products_order_status: productsOrderStatus,
+            ingredients_consumed: ingredientsConsumed,
             daily_chart: dailyChart
         });
     } catch (err) {

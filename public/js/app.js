@@ -562,11 +562,17 @@ async function confirmDeleteIngredient(ingredientId, name) {
 async function loadOrders() {
   const statusFilter = document.getElementById('orders-status-filter').value;
   const paymentFilter = document.getElementById('orders-payment-filter').value;
+  const dateInput = document.getElementById('orders-date-filter');
+  const dateVal = dateInput ? dateInput.value : '';
 
   const params = {};
   if (statusFilter) params.status = statusFilter;
   if (paymentFilter) params.payment_status = paymentFilter;
-  if (AppState.ordersPeriod !== 'all') params.period = AppState.ordersPeriod;
+  if (dateVal) {
+    params.date = dateVal;
+  } else if (AppState.ordersPeriod && AppState.ordersPeriod !== 'all') {
+    params.period = AppState.ordersPeriod;
+  }
 
   try {
     AppState.orders = await API.getOrders(params);
@@ -578,11 +584,37 @@ async function loadOrders() {
 
 function filterOrdersPeriod(period) {
   AppState.ordersPeriod = period;
-  ['today', 'tomorrow', 'week', 'all'].forEach(p => {
+  const dateInput = document.getElementById('orders-date-filter');
+  if (dateInput) dateInput.value = '';
+  const clearBtn = document.getElementById('btn-clear-order-date');
+  if (clearBtn) clearBtn.style.display = 'none';
+
+  ['today', 'tomorrow', 'week', 'history', 'all'].forEach(p => {
     const btn = document.getElementById(`order-tab-${p}`);
     if (btn) btn.classList.toggle('active', p === period);
   });
   loadOrders();
+}
+
+async function filterOrdersByDate(dateStr) {
+  if (!dateStr) return;
+  AppState.ordersPeriod = 'custom';
+  ['today', 'tomorrow', 'week', 'history', 'all'].forEach(p => {
+    const btn = document.getElementById(`order-tab-${p}`);
+    if (btn) btn.classList.remove('active');
+  });
+  const clearBtn = document.getElementById('btn-clear-order-date');
+  if (clearBtn) clearBtn.style.display = 'inline-block';
+
+  loadOrders();
+}
+
+function clearOrdersDateFilter() {
+  const dateInput = document.getElementById('orders-date-filter');
+  if (dateInput) dateInput.value = '';
+  const clearBtn = document.getElementById('btn-clear-order-date');
+  if (clearBtn) clearBtn.style.display = 'none';
+  filterOrdersPeriod('today');
 }
 
 function renderOrdersList() {
@@ -872,6 +904,12 @@ async function confirmDeleteCustomer(customerId, name) {
 }
 
 // ==================== MÓDULO DE FINANZAS Y MÉTRICAS ====================
+function filterMetricsPeriod(period) {
+  loadMetrics(period);
+}
+
+let currentMetricsIngredients = [];
+
 async function loadMetrics(period = 'month') {
   AppState.metricsPeriod = period;
   ['today', 'week', 'month', 'all'].forEach(p => {
@@ -910,6 +948,10 @@ async function loadMetrics(period = 'month') {
     // Resumen de estado de pedidos por producto
     currentProductStatusList = data.products_order_status || [];
     renderProductStatusTable();
+
+    // Cantidades de ingredientes consumidos
+    currentMetricsIngredients = data.ingredients_consumed || [];
+    renderMetricsIngredientsTable();
 
     // Gráfico Chart.js
     renderSalesCostChart(data.daily_chart);
@@ -1048,6 +1090,231 @@ function renderSalesCostChart(dailyData) {
       }
     }
   });
+}
+
+function renderMetricsIngredientsTable() {
+  const tbody = document.getElementById('metrics-ingredients-tbody');
+  const totalCostEl = document.getElementById('metrics-ingredients-total-cost');
+  if (!tbody) return;
+
+  const searchInput = document.getElementById('metrics-ingredient-search');
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+  let list = currentMetricsIngredients || [];
+  if (query) {
+    list = list.filter(i => (i.ingredient_name || '').toLowerCase().includes(query) || (i.ingredient_category || '').toLowerCase().includes(query));
+  }
+
+  if (list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align:center; padding:24px; color:var(--cream-500); font-size:13px;">
+          No hay consumo de ingredientes registrado para este período.
+        </td>
+      </tr>
+    `;
+    if (totalCostEl) totalCostEl.textContent = UI.formatCurrency(0);
+    return;
+  }
+
+  const totalCost = list.reduce((sum, item) => sum + (parseFloat(item.total_cost) || 0), 0);
+  if (totalCostEl) totalCostEl.textContent = UI.formatCurrency(totalCost);
+
+  tbody.innerHTML = list.map(item => `
+    <tr style="border-bottom:1px solid var(--cream-100); transition:background 0.15s;" onmouseover="this.style.background='var(--cream-50)'" onmouseout="this.style.background='transparent'">
+      <td style="padding:10px 12px; font-weight:700; color:var(--cream-900);">
+        ${item.ingredient_name}
+      </td>
+      <td style="padding:10px 8px; color:var(--cream-600); font-size:12px;">
+        ${item.ingredient_category || '—'}
+      </td>
+      <td style="padding:10px 8px; text-align:center;">
+        <span style="font-weight:700; font-size:12px; color:var(--primary-900); background:var(--primary-50); padding:3px 8px; border-radius:6px; border:1px solid var(--primary-200); display:inline-block;">
+          ${item.total_used} ${item.ingredient_unit}
+        </span>
+      </td>
+      <td style="padding:10px 8px; text-align:right; color:var(--cream-700);">
+        ${UI.formatCurrency(item.cost_per_unit)}/${item.ingredient_unit}
+      </td>
+      <td style="padding:10px 12px; text-align:right; font-weight:700; color:var(--primary-950);">
+        ${UI.formatCurrency(item.total_cost)}
+      </td>
+      <td style="padding:10px 8px; text-align:center; color:var(--cream-600); font-size:12px;">
+        ${item.orders_count || 1} pedido(s)
+      </td>
+    </tr>
+  `).join('');
+}
+
+// ==================== MÓDULO DE HISTÓRICO DE INVENTARIO & CONSUMO ====================
+let currentInvHistConsumption = [];
+let currentInvHistMovements = [];
+let activeInvHistPeriod = 'all';
+
+async function openInventoryHistoryModal() {
+  UI.openModal('modal-inventory-history');
+  switchInventoryHistorySubTab('consumption');
+  await loadInventoryConsumptionModal(activeInvHistPeriod);
+}
+
+function switchInventoryHistorySubTab(tab) {
+  const isConsumption = tab === 'consumption';
+  document.getElementById('inv-hist-tab-consumption').classList.toggle('active', isConsumption);
+  document.getElementById('inv-hist-tab-movements').classList.toggle('active', !isConsumption);
+  document.getElementById('inv-hist-subview-consumption').style.display = isConsumption ? 'flex' : 'none';
+  document.getElementById('inv-hist-subview-movements').style.display = !isConsumption ? 'flex' : 'none';
+
+  if (!isConsumption && currentInvHistMovements.length === 0) {
+    loadInventoryMovementsModal();
+  }
+}
+
+async function loadInventoryConsumptionModal(period = 'all') {
+  activeInvHistPeriod = period;
+  ['today', 'week', 'month', 'all'].forEach(p => {
+    const btn = document.getElementById(`inv-hist-period-${p}`);
+    if (btn) btn.classList.toggle('active', p === period);
+  });
+
+  try {
+    const list = await API.getIngredientsConsumption({ period });
+    currentInvHistConsumption = list || [];
+    renderInventoryConsumptionTable();
+  } catch (err) {
+    UI.showToast('Error cargando consumo de ingredientes: ' + err.message, 'error');
+  }
+}
+
+function renderInventoryConsumptionTable() {
+  const tbody = document.getElementById('inv-hist-consumption-tbody');
+  const totalCostEl = document.getElementById('inv-hist-consumption-total-cost');
+  if (!tbody) return;
+
+  const searchInput = document.getElementById('inv-hist-search-consumption');
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+  let list = currentInvHistConsumption || [];
+  if (query) {
+    list = list.filter(i => (i.ingredient_name || '').toLowerCase().includes(query) || (i.ingredient_category || '').toLowerCase().includes(query));
+  }
+
+  if (list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align:center; padding:20px; color:var(--cream-500);">
+          No hay registros de consumo de ingredientes para este período.
+        </td>
+      </tr>
+    `;
+    if (totalCostEl) totalCostEl.textContent = UI.formatCurrency(0);
+    return;
+  }
+
+  const totalCost = list.reduce((sum, item) => sum + (parseFloat(item.total_cost) || 0), 0);
+  if (totalCostEl) totalCostEl.textContent = UI.formatCurrency(totalCost);
+
+  tbody.innerHTML = list.map(item => `
+    <tr style="border-bottom:1px solid var(--cream-100);">
+      <td style="padding:8px 10px; font-weight:700; color:var(--cream-900);">
+        ${item.ingredient_name}
+      </td>
+      <td style="padding:8px 8px; color:var(--cream-600); font-size:12px;">
+        ${item.ingredient_category || '—'}
+      </td>
+      <td style="padding:8px 8px; text-align:center;">
+        <span style="font-weight:700; font-size:12px; color:var(--primary-900); background:var(--primary-50); padding:2px 6px; border-radius:4px; border:1px solid var(--primary-200);">
+          ${item.total_used} ${item.ingredient_unit}
+        </span>
+      </td>
+      <td style="padding:8px 8px; text-align:right; color:var(--cream-700);">
+        ${UI.formatCurrency(item.cost_per_unit)}/${item.ingredient_unit}
+      </td>
+      <td style="padding:8px 10px; text-align:right; font-weight:700; color:var(--primary-950);">
+        ${UI.formatCurrency(item.total_cost)}
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function loadInventoryMovementsModal() {
+  const typeFilter = document.getElementById('inv-hist-mov-type-filter').value;
+  try {
+    const params = { limit: 150 };
+    if (typeFilter) params.type = typeFilter;
+    const list = await API.getMovements(params);
+    currentInvHistMovements = list || [];
+    renderInventoryMovementsTable();
+  } catch (err) {
+    UI.showToast('Error cargando movimientos de inventario: ' + err.message, 'error');
+  }
+}
+
+function renderInventoryMovementsTable() {
+  const tbody = document.getElementById('inv-hist-movements-tbody');
+  if (!tbody) return;
+
+  const searchInput = document.getElementById('inv-hist-search-movements');
+  const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+  let list = currentInvHistMovements || [];
+  if (query) {
+    list = list.filter(m => 
+      (m.ingredient_name || '').toLowerCase().includes(query) || 
+      (m.reference || '').toLowerCase().includes(query) ||
+      (m.notes || '').toLowerCase().includes(query)
+    );
+  }
+
+  if (list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align:center; padding:20px; color:var(--cream-500);">
+          No se encontraron movimientos de inventario con los filtros seleccionados.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = list.map(m => {
+    let typeBadge = '';
+    const isOut = (m.type || '').startsWith('SALIDA') || m.type === 'MERMA' || m.type === 'AJUSTE_RESTA';
+    if (m.type === 'SALIDA_PEDIDO') {
+      typeBadge = `<span class="badge" style="background:#fee2e2; color:#b91c1c; font-size:10px;"><i class="ti ti-clipboard-check"></i> Pedido</span>`;
+    } else if (m.type === 'SALIDA_PRODUCCION') {
+      typeBadge = `<span class="badge" style="background:#ffedd5; color:#c2410c; font-size:10px;"><i class="ti ti-flame"></i> Producción</span>`;
+    } else if (m.type === 'ENTRADA') {
+      typeBadge = `<span class="badge badge-mint" style="font-size:10px;"><i class="ti ti-arrow-down-left"></i> Entrada</span>`;
+    } else if (m.type === 'MERMA') {
+      typeBadge = `<span class="badge" style="background:#fef2f2; color:#991b1b; font-size:10px;">⚠️ Merma</span>`;
+    } else {
+      typeBadge = `<span class="badge" style="background:var(--cream-200); font-size:10px;">${m.type}</span>`;
+    }
+
+    const sign = isOut ? '-' : '+';
+    const color = isOut ? '#dc2626' : '#16a34a';
+
+    return `
+      <tr style="border-bottom:1px solid var(--cream-100);">
+        <td style="padding:6px 10px; font-size:11px; color:var(--cream-700); white-space:nowrap;">
+          ${UI.formatDate(m.created_at ? m.created_at.split(' ')[0] : '')}
+        </td>
+        <td style="padding:6px 8px; font-weight:600; color:var(--cream-900);">
+          ${m.ingredient_name}
+        </td>
+        <td style="padding:6px 8px; text-align:center;">
+          ${typeBadge}
+        </td>
+        <td style="padding:6px 8px; text-align:center; font-weight:700; color:${color};">
+          ${sign}${m.quantity} ${m.ingredient_unit}
+        </td>
+        <td style="padding:6px 10px; font-size:11px; color:var(--cream-800);">
+          <div>${m.reference || '—'}</div>
+          ${m.notes ? `<div style="color:var(--cream-500); font-size:10px;">${m.notes}</div>` : ''}
+        </td>
+      </tr>
+    `;
+  }).join('');
 }
 
 // ==================== MODALES Y CONSTRUCTORES ====================

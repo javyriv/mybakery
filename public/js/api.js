@@ -29,6 +29,14 @@ const API = {
   // Insumos e Inventario
   getInventory: () => API.request('/inventory'),
   getInventoryAlerts: () => API.request('/inventory/alerts'),
+  getMovements: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return API.request(`/inventory/movements${qs ? '?' + qs : ''}`);
+  },
+  getIngredientsConsumption: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return API.request(`/inventory/consumption${qs ? '?' + qs : ''}`);
+  },
   createIngredient: (data) => API.request('/inventory', { method: 'POST', body: JSON.stringify(data) }),
   updateIngredient: (id, data) => API.request(`/inventory/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   adjustStock: (id, data) => API.request(`/inventory/${id}/adjust`, { method: 'POST', body: JSON.stringify(data) }),
@@ -52,6 +60,7 @@ const API = {
     method: 'POST',
     body: JSON.stringify({ product_id: productId, quantity, notes, allow_negative_stock: allowNegative })
   }),
+  getProductionHistory: () => API.request('/production/history'),
 
   // Clientes
   getCustomers: () => API.request('/customers'),
