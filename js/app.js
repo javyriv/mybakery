@@ -562,14 +562,24 @@ async function confirmDeleteIngredient(ingredientId, name) {
 async function loadOrders() {
   const statusFilter = document.getElementById('orders-status-filter').value;
   const paymentFilter = document.getElementById('orders-payment-filter').value;
-  const dateInput = document.getElementById('orders-date-filter');
-  const dateVal = dateInput ? dateInput.value : '';
+  const dateFrom = document.getElementById('orders-date-from') ? document.getElementById('orders-date-from').value : '';
+  const dateTo = document.getElementById('orders-date-to') ? document.getElementById('orders-date-to').value : '';
 
   const params = {};
   if (statusFilter) params.status = statusFilter;
   if (paymentFilter) params.payment_status = paymentFilter;
-  if (dateVal) {
-    params.date = dateVal;
+
+  if (dateFrom && dateTo) {
+    if (dateFrom === dateTo) {
+      params.date = dateFrom;
+    } else {
+      params.start_date = dateFrom;
+      params.end_date = dateTo;
+    }
+  } else if (dateFrom) {
+    params.date = dateFrom;
+  } else if (dateTo) {
+    params.date = dateTo;
   } else if (AppState.ordersPeriod && AppState.ordersPeriod !== 'all') {
     params.period = AppState.ordersPeriod;
   }
@@ -584,8 +594,10 @@ async function loadOrders() {
 
 function filterOrdersPeriod(period) {
   AppState.ordersPeriod = period;
-  const dateInput = document.getElementById('orders-date-filter');
-  if (dateInput) dateInput.value = '';
+  const fromEl = document.getElementById('orders-date-from');
+  const toEl = document.getElementById('orders-date-to');
+  if (fromEl) fromEl.value = '';
+  if (toEl) toEl.value = '';
   const clearBtn = document.getElementById('btn-clear-order-date');
   if (clearBtn) clearBtn.style.display = 'none';
 
@@ -596,13 +608,23 @@ function filterOrdersPeriod(period) {
   loadOrders();
 }
 
-async function filterOrdersByDate(dateStr) {
-  if (!dateStr) return;
+function applyOrdersCustomDateFilter() {
+  const fromEl = document.getElementById('orders-date-from');
+  const toEl = document.getElementById('orders-date-to');
+  const from = fromEl ? fromEl.value : '';
+  const to = toEl ? toEl.value : '';
+
+  if (!from && !to) {
+    clearOrdersDateFilter();
+    return;
+  }
+
   AppState.ordersPeriod = 'custom';
   ['today', 'tomorrow', 'week', 'history', 'all'].forEach(p => {
     const btn = document.getElementById(`order-tab-${p}`);
     if (btn) btn.classList.remove('active');
   });
+
   const clearBtn = document.getElementById('btn-clear-order-date');
   if (clearBtn) clearBtn.style.display = 'inline-block';
 
@@ -610,8 +632,10 @@ async function filterOrdersByDate(dateStr) {
 }
 
 function clearOrdersDateFilter() {
-  const dateInput = document.getElementById('orders-date-filter');
-  if (dateInput) dateInput.value = '';
+  const fromEl = document.getElementById('orders-date-from');
+  const toEl = document.getElementById('orders-date-to');
+  if (fromEl) fromEl.value = '';
+  if (toEl) toEl.value = '';
   const clearBtn = document.getElementById('btn-clear-order-date');
   if (clearBtn) clearBtn.style.display = 'none';
   filterOrdersPeriod('today');
@@ -904,21 +928,110 @@ async function confirmDeleteCustomer(customerId, name) {
 }
 
 // ==================== MÓDULO DE FINANZAS Y MÉTRICAS ====================
+let activeMetricsOptions = { period: 'month' };
+
 function filterMetricsPeriod(period) {
-  loadMetrics(period);
+  const fromEl = document.getElementById('metrics-date-from');
+  const toEl = document.getElementById('metrics-date-to');
+  const monthEl = document.getElementById('metrics-month-picker');
+  if (fromEl) fromEl.value = '';
+  if (toEl) toEl.value = '';
+  if (monthEl) monthEl.value = '';
+  const clearBtn = document.getElementById('btn-clear-metrics-range');
+  if (clearBtn) clearBtn.style.display = 'none';
+
+  loadMetrics({ period });
+}
+
+function handleMetricsCustomDateChange() {
+  const clearBtn = document.getElementById('btn-clear-metrics-range');
+  if (clearBtn) clearBtn.style.display = 'inline-block';
+}
+
+function applyMetricsCustomRange() {
+  const fromEl = document.getElementById('metrics-date-from');
+  const toEl = document.getElementById('metrics-date-to');
+  let from = fromEl ? fromEl.value : '';
+  let to = toEl ? toEl.value : '';
+
+  if (!from && !to) {
+    UI.showToast('Por favor selecciona una fecha o rango de fechas.', 'warning');
+    return;
+  }
+
+  if (from && !to) to = from;
+  if (!from && to) from = to;
+
+  ['today', 'week', 'month', 'all'].forEach(p => {
+    const btn = document.getElementById(`metrics-tab-${p}`);
+    if (btn) btn.classList.remove('active');
+  });
+
+  const clearBtn = document.getElementById('btn-clear-metrics-range');
+  if (clearBtn) clearBtn.style.display = 'inline-block';
+
+  const monthEl = document.getElementById('metrics-month-picker');
+  if (monthEl) monthEl.value = '';
+
+  loadMetrics({ start_date: from, end_date: to });
+}
+
+function filterMetricsByMonth(monthStr) {
+  if (!monthStr) return;
+  const [y, m] = monthStr.split('-').map(Number);
+  const lastDay = new Date(y, m, 0).getDate();
+  const from = `${monthStr}-01`;
+  const to = `${monthStr}-${String(lastDay).padStart(2, '0')}`;
+
+  const fromEl = document.getElementById('metrics-date-from');
+  const toEl = document.getElementById('metrics-date-to');
+  if (fromEl) fromEl.value = from;
+  if (toEl) toEl.value = to;
+
+  ['today', 'week', 'month', 'all'].forEach(p => {
+    const btn = document.getElementById(`metrics-tab-${p}`);
+    if (btn) btn.classList.remove('active');
+  });
+
+  const clearBtn = document.getElementById('btn-clear-metrics-range');
+  if (clearBtn) clearBtn.style.display = 'inline-block';
+
+  loadMetrics({ start_date: from, end_date: to });
+}
+
+function clearMetricsCustomRange() {
+  const fromEl = document.getElementById('metrics-date-from');
+  const toEl = document.getElementById('metrics-date-to');
+  const monthEl = document.getElementById('metrics-month-picker');
+  if (fromEl) fromEl.value = '';
+  if (toEl) toEl.value = '';
+  if (monthEl) monthEl.value = '';
+  const clearBtn = document.getElementById('btn-clear-metrics-range');
+  if (clearBtn) clearBtn.style.display = 'none';
+  filterMetricsPeriod('month');
 }
 
 let currentMetricsIngredients = [];
 
-async function loadMetrics(period = 'month') {
-  AppState.metricsPeriod = period;
-  ['today', 'week', 'month', 'all'].forEach(p => {
-    const btn = document.getElementById(`metrics-tab-${p}`);
-    if (btn) btn.classList.toggle('active', p === period);
-  });
+async function loadMetrics(options = 'month') {
+  const params = typeof options === 'string' ? { period: options } : options;
+  activeMetricsOptions = params;
+
+  if (params.period) {
+    AppState.metricsPeriod = params.period;
+    ['today', 'week', 'month', 'all'].forEach(p => {
+      const btn = document.getElementById(`metrics-tab-${p}`);
+      if (btn) btn.classList.toggle('active', p === params.period);
+    });
+  } else {
+    ['today', 'week', 'month', 'all'].forEach(p => {
+      const btn = document.getElementById(`metrics-tab-${p}`);
+      if (btn) btn.classList.remove('active');
+    });
+  }
 
   try {
-    const data = await API.getMetrics(period);
+    const data = await API.getMetrics(params);
     document.getElementById('fin-revenue').textContent = UI.formatCurrency(data.summary.total_revenue);
     document.getElementById('fin-orders-count').textContent = `${data.summary.total_orders} pedidos`;
     document.getElementById('fin-costs').textContent = UI.formatCurrency(data.summary.total_cost);
@@ -929,7 +1042,7 @@ async function loadMetrics(period = 'month') {
     // Top productos
     const topContainer = document.getElementById('metrics-top-products-list');
     if (data.top_products.length === 0) {
-      topContainer.innerHTML = '<div style="color:var(--cream-500); font-size:13px;">Sin ventas registradas en el período.</div>';
+      topContainer.innerHTML = '<div style="color:var(--cream-500); font-size:13px;">Sin ventas registradas en el período seleccionado.</div>';
     } else {
       topContainer.innerHTML = data.top_products.map((tp, idx) => `
         <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px dashed var(--cream-200); font-size:13px;">
@@ -1169,15 +1282,48 @@ function switchInventoryHistorySubTab(tab) {
   }
 }
 
-async function loadInventoryConsumptionModal(period = 'all') {
-  activeInvHistPeriod = period;
+function applyInventoryConsumptionCustomRange() {
+  const fromEl = document.getElementById('inv-hist-date-from');
+  const toEl = document.getElementById('inv-hist-date-to');
+  let from = fromEl ? fromEl.value : '';
+  let to = toEl ? toEl.value : '';
+
+  if (!from && !to) {
+    UI.showToast('Por favor selecciona una fecha o rango.', 'warning');
+    return;
+  }
+  if (from && !to) to = from;
+  if (!from && to) from = to;
+
   ['today', 'week', 'month', 'all'].forEach(p => {
     const btn = document.getElementById(`inv-hist-period-${p}`);
-    if (btn) btn.classList.toggle('active', p === period);
+    if (btn) btn.classList.remove('active');
   });
 
+  loadInventoryConsumptionModal({ start_date: from, end_date: to });
+}
+
+async function loadInventoryConsumptionModal(options = 'all') {
+  const params = typeof options === 'string' ? { period: options } : options;
+  if (params.period) {
+    activeInvHistPeriod = params.period;
+    const fromEl = document.getElementById('inv-hist-date-from');
+    const toEl = document.getElementById('inv-hist-date-to');
+    if (fromEl) fromEl.value = '';
+    if (toEl) toEl.value = '';
+    ['today', 'week', 'month', 'all'].forEach(p => {
+      const btn = document.getElementById(`inv-hist-period-${p}`);
+      if (btn) btn.classList.toggle('active', p === params.period);
+    });
+  } else {
+    ['today', 'week', 'month', 'all'].forEach(p => {
+      const btn = document.getElementById(`inv-hist-period-${p}`);
+      if (btn) btn.classList.remove('active');
+    });
+  }
+
   try {
-    const list = await API.getIngredientsConsumption({ period });
+    const list = await API.getIngredientsConsumption(params);
     currentInvHistConsumption = list || [];
     renderInventoryConsumptionTable();
   } catch (err) {
@@ -1238,9 +1384,14 @@ function renderInventoryConsumptionTable() {
 
 async function loadInventoryMovementsModal() {
   const typeFilter = document.getElementById('inv-hist-mov-type-filter').value;
+  const from = document.getElementById('inv-hist-mov-from') ? document.getElementById('inv-hist-mov-from').value : '';
+  const to = document.getElementById('inv-hist-mov-to') ? document.getElementById('inv-hist-mov-to').value : '';
+
   try {
-    const params = { limit: 150 };
+    const params = { limit: 200 };
     if (typeFilter) params.type = typeFilter;
+    if (from) params.start_date = from;
+    if (to) params.end_date = to;
     const list = await API.getMovements(params);
     currentInvHistMovements = list || [];
     renderInventoryMovementsTable();

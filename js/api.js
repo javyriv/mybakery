@@ -738,13 +738,16 @@ const API = {
     if (params.status)         result = result.filter(o => o.status === params.status);
     if (params.payment_status) result = result.filter(o => o.payment_status === params.payment_status);
     if (params.date)                      result = result.filter(o => o.delivery_date === params.date);
+    else if (params.start_date && params.end_date) result = result.filter(o => o.delivery_date >= params.start_date && o.delivery_date <= params.end_date);
+    else if (params.start_date)           result = result.filter(o => o.delivery_date >= params.start_date);
+    else if (params.end_date)             result = result.filter(o => o.delivery_date <= params.end_date);
     else if (params.period === 'today')   result = result.filter(o => o.delivery_date === today);
     else if (params.period === 'tomorrow')result = result.filter(o => o.delivery_date === DB.dayOffset(1));
     else if (params.period === 'week')    result = result.filter(o => o.delivery_date >= today && o.delivery_date <= DB.dayOffset(7));
     else if (params.period === 'history' || params.period === 'past') result = result.filter(o => o.delivery_date < today);
 
     result.sort((a, b) => {
-      if (params.period === 'history' || params.period === 'past' || params.period === 'all') {
+      if (params.start_date || params.end_date || params.period === 'history' || params.period === 'past' || params.period === 'all') {
         if (a.delivery_date !== b.delivery_date) return b.delivery_date.localeCompare(a.delivery_date);
         if ((a.delivery_time || '') !== (b.delivery_time || '')) return (b.delivery_time || '').localeCompare(a.delivery_time || '');
         return b.id - a.id;
@@ -937,7 +940,10 @@ const API = {
   },
 
   // ── Métricas ─────────────────────────────────────────────────────
-  async getMetrics(period = 'month') {
+  async getMetrics(options = 'month') {
+    const params = typeof options === 'string' ? { period: options } : (options || {});
+    const period = params.period;
+    const { start_date, end_date, date } = params;
     const today = DB.today();
     const [orders, orderItems, products, ingredients, recipes] = await Promise.all([
       DB.getList('orders'),
@@ -948,9 +954,21 @@ const API = {
     ]);
 
     let filtered = orders.filter(o => o.status !== 'CANCELADO');
-    if      (period === 'today') filtered = filtered.filter(o => o.delivery_date === today);
-    else if (period === 'week')  filtered = filtered.filter(o => o.delivery_date >= DB.dayOffset(-7));
-    else if (period === 'month') filtered = filtered.filter(o => o.delivery_date >= today.slice(0,7) + '-01');
+    if (date) {
+      filtered = filtered.filter(o => o.delivery_date === date);
+    } else if (start_date && end_date) {
+      filtered = filtered.filter(o => o.delivery_date >= start_date && o.delivery_date <= end_date);
+    } else if (start_date) {
+      filtered = filtered.filter(o => o.delivery_date >= start_date);
+    } else if (end_date) {
+      filtered = filtered.filter(o => o.delivery_date <= end_date);
+    } else if (period === 'today') {
+      filtered = filtered.filter(o => o.delivery_date === today);
+    } else if (period === 'week') {
+      filtered = filtered.filter(o => o.delivery_date >= DB.dayOffset(-7));
+    } else if (period === 'month') {
+      filtered = filtered.filter(o => o.delivery_date >= today.slice(0,7) + '-01');
+    }
 
     const totalRevenue   = filtered.reduce((s, o) => s + o.total_amount, 0);
     const totalCost      = filtered.reduce((s, o) => s + o.total_cost,   0);
@@ -1078,7 +1096,14 @@ const API = {
     }).sort((a, b) => b.total_cost - a.total_cost || b.total_used - a.total_used);
 
     let dailyChart = [];
-    if (period === 'all') {
+    if (date) {
+      dailyChart = [{
+        date,
+        revenue: Math.round(filtered.reduce((s, o) => s + o.total_amount, 0) * 100) / 100,
+        cost: Math.round(filtered.reduce((s, o) => s + o.total_cost, 0) * 100) / 100,
+        profit: Math.round(filtered.reduce((s, o) => s + (o.total_amount - o.total_cost), 0) * 100) / 100
+      }];
+    } else if (start_date || end_date || period === 'all') {
       const datesSet = new Set(filtered.map(o => o.delivery_date).filter(Boolean));
       const sortedDates = Array.from(datesSet).sort();
       dailyChart = sortedDates.map(d => {
@@ -1161,7 +1186,7 @@ const API = {
   },
 
   async getIngredientsConsumption(params = {}) {
-    const metrics = await this.getMetrics(params.period || 'all');
+    const metrics = await this.getMetrics(params || 'all');
     return metrics.ingredients_consumed || [];
   },
 
