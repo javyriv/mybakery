@@ -157,6 +157,54 @@ router.get('/', (req, res) => {
             ORDER BY total_cost DESC, total_used DESC
         `);
 
+        // Desglose de insumos consumidos por receta / producto vendido
+        const productsSold = query(`
+            SELECT 
+                p.id as product_id,
+                p.name as product_name,
+                p.category as product_category,
+                COALESCE(p.yield_quantity, 1) as yield_quantity,
+                COALESCE(p.yield_unit, 'unidad') as yield_unit,
+                SUM(oi.quantity) as total_units_sold,
+                SUM(oi.subtotal) as total_revenue,
+                SUM(oi.unit_cost * oi.quantity) as total_cost,
+                COUNT(DISTINCT o.id) as orders_count
+            FROM order_items oi
+            JOIN orders o ON oi.order_id = o.id
+            JOIN products p ON oi.product_id = p.id
+            WHERE o.status != 'CANCELADO'
+            ${dateFilterOrders ? dateFilterOrders.replace('WHERE', 'AND') : ''}
+            GROUP BY p.id
+            ORDER BY total_units_sold DESC, total_revenue DESC
+        `);
+
+        const recipesConsumed = productsSold.map(p => {
+            const yieldQty = p.yield_quantity > 0 ? p.yield_quantity : 1;
+            const scale = p.total_units_sold / yieldQty;
+            const ingredients = query(`
+                SELECT 
+                    r.ingredient_id,
+                    i.name as ingredient_name,
+                    i.category as ingredient_category,
+                    i.unit as ingredient_unit,
+                    i.cost_per_unit,
+                    r.quantity as base_quantity,
+                    ROUND(r.quantity * ?, 3) as total_used,
+                    ROUND(r.quantity * ? * i.cost_per_unit, 2) as total_cost
+                FROM recipes r
+                JOIN ingredients i ON r.ingredient_id = i.id
+                WHERE r.product_id = ?
+                ORDER BY i.name ASC
+            `, [scale, scale, p.product_id]);
+
+            const totalIngredientsCost = ingredients.reduce((sum, ing) => sum + (ing.total_cost || 0), 0);
+            return {
+                ...p,
+                total_ingredients_cost: Math.round(totalIngredientsCost * 100) / 100,
+                ingredients
+            };
+        });
+
         // Resumen rápido de inventario
         const inventorySummary = get(`
             SELECT 
@@ -209,6 +257,7 @@ router.get('/', (req, res) => {
             top_products: topProducts,
             products_order_status: productsOrderStatus,
             ingredients_consumed: ingredientsConsumed,
+            recipes_consumed: recipesConsumed,
             daily_chart: dailyChart
         });
     } catch (err) {

@@ -37,6 +37,10 @@ const API = {
     const qs = new URLSearchParams(params).toString();
     return API.request(`/inventory/consumption${qs ? '?' + qs : ''}`);
   },
+  getRecipesConsumption: (params = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return API.request(`/inventory/recipes-consumption${qs ? '?' + qs : ''}`);
+  },
   createIngredient: (data) => API.request('/inventory', { method: 'POST', body: JSON.stringify(data) }),
   updateIngredient: (id, data) => API.request(`/inventory/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   adjustStock: (id, data) => API.request(`/inventory/${id}/adjust`, { method: 'POST', body: JSON.stringify(data) }),

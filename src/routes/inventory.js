@@ -175,6 +175,83 @@ router.get('/consumption', (req, res) => {
     }
 });
 
+// Desglose de insumos consumidos agrupados por cada receta vendida / elaborada
+router.get('/recipes-consumption', (req, res) => {
+    try {
+        const { period, start_date, end_date, date } = req.query;
+        let dateFilter = "";
+        const today = new Date().toISOString().split('T')[0];
+
+        if (date) {
+            dateFilter = ` AND o.delivery_date = '${date}'`;
+        } else if (start_date && end_date) {
+            dateFilter = ` AND o.delivery_date BETWEEN '${start_date}' AND '${end_date}'`;
+        } else if (start_date) {
+            dateFilter = ` AND o.delivery_date >= '${start_date}'`;
+        } else if (end_date) {
+            dateFilter = ` AND o.delivery_date <= '${end_date}'`;
+        } else if (period === 'today') {
+            dateFilter = ` AND o.delivery_date = '${today}'`;
+        } else if (period === 'week') {
+            dateFilter = ` AND o.delivery_date >= date('now', '-7 days')`;
+        } else if (period === 'month') {
+            dateFilter = ` AND o.delivery_date >= date('now', 'start of month')`;
+        }
+
+        const productsSold = query(`
+            SELECT 
+                p.id as product_id,
+                p.name as product_name,
+                p.category as product_category,
+                COALESCE(p.yield_quantity, 1) as yield_quantity,
+                COALESCE(p.yield_unit, 'unidad') as yield_unit,
+                SUM(oi.quantity) as total_units_sold,
+                SUM(oi.subtotal) as total_revenue,
+                SUM(oi.unit_cost * oi.quantity) as total_cost,
+                COUNT(DISTINCT o.id) as orders_count
+            FROM order_items oi
+            JOIN orders o ON oi.order_id = o.id
+            JOIN products p ON oi.product_id = p.id
+            WHERE o.status != 'CANCELADO'
+            ${dateFilter}
+            GROUP BY p.id
+            ORDER BY total_units_sold DESC, total_revenue DESC
+        `);
+
+        const recipesConsumed = productsSold.map(p => {
+            const yieldQty = p.yield_quantity > 0 ? p.yield_quantity : 1;
+            const scale = p.total_units_sold / yieldQty;
+            const ingredients = query(`
+                SELECT 
+                    r.ingredient_id,
+                    i.name as ingredient_name,
+                    i.category as ingredient_category,
+                    i.unit as ingredient_unit,
+                    i.cost_per_unit,
+                    r.quantity as base_quantity,
+                    ROUND(r.quantity * ?, 3) as total_used,
+                    ROUND(r.quantity * ? * i.cost_per_unit, 2) as total_cost
+                FROM recipes r
+                JOIN ingredients i ON r.ingredient_id = i.id
+                WHERE r.product_id = ?
+                ORDER BY i.name ASC
+            `, [scale, scale, p.product_id]);
+
+            const totalIngredientsCost = ingredients.reduce((sum, ing) => sum + (ing.total_cost || 0), 0);
+            return {
+                ...p,
+                total_ingredients_cost: Math.round(totalIngredientsCost * 100) / 100,
+                ingredients
+            };
+        });
+
+        res.json(recipesConsumed);
+    } catch (err) {
+        console.error('Error obteniendo consumo por recetas:', err);
+        res.status(500).json({ error: 'Error al calcular consumo por receta' });
+    }
+});
+
 // Crear nuevo insumo
 router.post('/', (req, res) => {
     try {
